@@ -1,5 +1,6 @@
 "use client";
 
+import { upload } from "@vercel/blob/client";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 
@@ -9,6 +10,11 @@ import {
   getImportStatusLabel,
   getRiskSeverityLabel
 } from "@/lib/common-language";
+import {
+  createSnapshotUploadPathname,
+  isSnapshotCsvFilename,
+  maxSnapshotUploadBytes
+} from "@/lib/snapshot-upload";
 
 type SnapshotRecord = {
   id: string;
@@ -49,6 +55,7 @@ type SnapshotRecord = {
 
 type SnapshotConsoleProps = {
   snapshots: SnapshotRecord[];
+  blobUploadsEnabled: boolean;
   user: AppSessionUser;
 };
 
@@ -89,7 +96,7 @@ function getProgressSteps(snapshot: SnapshotRecord) {
   ];
 }
 
-export function SnapshotConsole({ snapshots, user }: SnapshotConsoleProps) {
+export function SnapshotConsole({ snapshots, blobUploadsEnabled, user }: SnapshotConsoleProps) {
   const router = useRouter();
   const [formState, setFormState] = useState(defaultFormState);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -154,16 +161,58 @@ export function SnapshotConsole({ snapshots, user }: SnapshotConsoleProps) {
                 }
                 let resolvedFileUri = manualFileUri;
                 if (selectedFile) {
-                  const uploadBody = new FormData();
-                  uploadBody.append("file", selectedFile);
-                  const uploadResponse = await fetch("/api/snapshots/upload", { method: "POST", body: uploadBody });
-                  if (!uploadResponse.ok) {
-                    const errorPayload = (await uploadResponse.json().catch(() => null)) as { error?: string } | null;
-                    setMessage(errorPayload?.error ? `Upload failed: ${errorPayload.error}` : "Upload failed.");
+                  if (!isSnapshotCsvFilename(selectedFile.name)) {
+                    setMessage("Only .csv files are supported.");
                     return;
                   }
-                  const uploadPayload = (await uploadResponse.json()) as { fileUri: string };
-                  resolvedFileUri = uploadPayload.fileUri;
+
+                  if (selectedFile.size > maxSnapshotUploadBytes) {
+                    setMessage("CSV upload exceeds the 10 MB limit.");
+                    return;
+                  }
+
+                  try {
+                    if (blobUploadsEnabled) {
+                      const uploadedBlob = await upload(
+                        createSnapshotUploadPathname(selectedFile.name),
+                        selectedFile,
+                        {
+                          access: "public",
+                          handleUploadUrl: "/api/snapshots/upload",
+                          clientPayload: JSON.stringify({
+                            originalName: selectedFile.name,
+                            size: selectedFile.size
+                          })
+                        }
+                      );
+                      resolvedFileUri = uploadedBlob.url;
+                    } else {
+                      const uploadBody = new FormData();
+                      uploadBody.append("file", selectedFile);
+                      const uploadResponse = await fetch("/api/snapshots/upload", {
+                        method: "POST",
+                        body: uploadBody
+                      });
+                      if (!uploadResponse.ok) {
+                        const errorPayload = (await uploadResponse
+                          .json()
+                          .catch(() => null)) as { error?: string } | null;
+                        setMessage(
+                          errorPayload?.error
+                            ? `Upload failed: ${errorPayload.error}`
+                            : "Upload failed."
+                        );
+                        return;
+                      }
+                      const uploadPayload = (await uploadResponse.json()) as { fileUri: string };
+                      resolvedFileUri = uploadPayload.fileUri;
+                    }
+                  } catch (error) {
+                    setMessage(
+                      error instanceof Error ? `Upload failed: ${error.message}` : "Upload failed."
+                    );
+                    return;
+                  }
                 }
                 const response = await fetch("/api/snapshots", {
                   method: "POST",
@@ -215,7 +264,7 @@ export function SnapshotConsole({ snapshots, user }: SnapshotConsoleProps) {
               </label>
               <label className="field">
                 <span>File path (optional)</span>
-                <input disabled={!canWrite || isPending} onChange={(e) => setFormState((c) => ({ ...c, fileUri: e.target.value }))} placeholder="file:///... or s3://..." value={formState.fileUri} />
+                <input disabled={!canWrite || isPending} onChange={(e) => setFormState((c) => ({ ...c, fileUri: e.target.value }))} placeholder="https://... or file://..." value={formState.fileUri} />
               </label>
             </div>
             <div className="inline-fields">

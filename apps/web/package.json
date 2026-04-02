@@ -17,6 +17,7 @@
     "@bgc-alpha/schemas": "workspace:*",
     "@bgc-alpha/simulation-core": "workspace:*",
     "@bgc-alpha/ui": "workspace:*",
+    "@vercel/blob": "^1.1.1",
     "@tanstack/react-table": "^8.20.5",
     "echarts": "^5.5.1",
     "next": "^15.0.0",

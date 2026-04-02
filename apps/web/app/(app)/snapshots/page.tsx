@@ -1,5 +1,6 @@
 import { listSnapshots } from "@bgc-alpha/db";
 import { hasDatabaseUrl } from "@bgc-alpha/db/database-url";
+import { hasBlobReadWriteToken } from "@bgc-alpha/db/snapshot-storage";
 import { PageHeader } from "@bgc-alpha/ui";
 
 import { SnapshotConsole } from "@/components/snapshot-console";
@@ -45,6 +46,7 @@ export default async function SnapshotsPage() {
           dateTo: snapshot.dateTo.toISOString(),
           approvedAt: snapshot.approvedAt?.toISOString() ?? null
         }))}
+        blobUploadsEnabled={hasBlobReadWriteToken()}
         user={user}
       />
     </>

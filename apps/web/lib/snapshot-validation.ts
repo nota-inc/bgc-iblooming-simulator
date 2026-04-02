@@ -54,7 +54,7 @@ export function validateSnapshot(snapshot: SnapshotForValidation) {
     issues.push({
       severity: "WARNING",
       issueType: "file_uri_scheme",
-      message: "Snapshot file URI should use an explicit storage scheme such as s3://, https://, or file://."
+      message: "Snapshot file URI should use an explicit storage scheme such as https:// or file://."
     });
   }
 
