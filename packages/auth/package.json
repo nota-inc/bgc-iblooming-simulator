@@ -1,0 +1,25 @@
+{
+  "name": "@bgc-alpha/auth",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test": "echo 'No tests yet for @bgc-alpha/auth'"
+  },
+  "exports": {
+    ".": "./src/auth.ts",
+    "./roles": "./src/roles.ts",
+    "./guards": "./src/guards.ts",
+    "./passwords": "./src/passwords.ts"
+  },
+  "dependencies": {
+    "@bgc-alpha/db": "workspace:*",
+    "next-auth": "^5.0.0-beta.25"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

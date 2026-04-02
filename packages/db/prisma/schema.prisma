@@ -1,0 +1,312 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum SnapshotStatus {
+  DRAFT
+  VALIDATING
+  INVALID
+  VALID
+  APPROVED
+  ARCHIVED
+}
+
+enum SnapshotImportStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum ModelStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum RunStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum ExportStatus {
+  DRAFT
+  READY
+  FAILED
+}
+
+model User {
+  id          String      @id @default(cuid())
+  name        String
+  email       String      @unique
+  passwordHash String
+  status      UserStatus  @default(ACTIVE)
+  lastLoginAt DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  userRoles   UserRole[]
+  auditEvents AuditEvent[] @relation("AuditActor")
+
+  @@index([status])
+}
+
+model Role {
+  id        String     @id @default(cuid())
+  key       String     @unique
+  label     String
+  createdAt DateTime   @default(now())
+  userRoles UserRole[]
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+}
+
+model DatasetSnapshot {
+  id                String                    @id @default(cuid())
+  name              String
+  sourceSystems     Json
+  dateFrom          DateTime
+  dateTo            DateTime
+  fileUri           String
+  recordCount       Int?
+  validationStatus  SnapshotStatus           @default(DRAFT)
+  approvedByUserId  String?
+  approvedAt        DateTime?
+  notes             String?
+  createdByUserId   String?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  validationIssues  SnapshotValidationIssue[]
+  importRuns        SnapshotImportRun[]
+  memberMonthFacts  SnapshotMemberMonthFact[]
+  scenarios         Scenario[]
+  runs              SimulationRun[]
+
+  @@index([validationStatus, createdAt(sort: Desc)])
+  @@index([dateFrom, dateTo])
+}
+
+model SnapshotValidationIssue {
+  id          String   @id @default(cuid())
+  snapshotId  String
+  severity    String
+  issueType   String
+  message     String
+  rowRef      String?
+  createdAt   DateTime @default(now())
+  snapshot    DatasetSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@index([snapshotId, severity])
+}
+
+model SnapshotImportRun {
+  id               String               @id @default(cuid())
+  snapshotId       String
+  status           SnapshotImportStatus @default(QUEUED)
+  fileUri          String
+  requestedByUserId String?
+  rowCountRaw      Int?
+  rowCountImported Int?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  notes            String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  snapshot         DatasetSnapshot      @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  issues           SnapshotImportIssue[]
+  memberMonthFacts SnapshotMemberMonthFact[]
+
+  @@index([snapshotId, createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+}
+
+model SnapshotImportIssue {
+  id          String            @id @default(cuid())
+  importRunId String
+  severity    String
+  issueType   String
+  rowRef      String?
+  message     String
+  createdAt   DateTime          @default(now())
+  importRun   SnapshotImportRun @relation(fields: [importRunId], references: [id], onDelete: Cascade)
+
+  @@index([importRunId, severity])
+}
+
+model SnapshotMemberMonthFact {
+  id              String            @id @default(cuid())
+  snapshotId      String
+  importRunId     String?
+  periodKey       String
+  memberKey       String
+  sourceSystem    String
+  memberTier      String?
+  groupKey        String?
+  pcVolume        Float
+  spRewardBasis   Float
+  globalRewardUsd Float
+  poolRewardUsd   Float
+  cashoutUsd      Float
+  sinkSpendUsd    Float
+  activeMember    Boolean
+  metadataJson    Json?
+  createdAt       DateTime          @default(now())
+  snapshot        DatasetSnapshot    @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  importRun       SnapshotImportRun? @relation(fields: [importRunId], references: [id], onDelete: SetNull)
+
+  @@unique([snapshotId, periodKey, memberKey, sourceSystem])
+  @@index([snapshotId, periodKey])
+  @@index([snapshotId, memberTier])
+  @@index([snapshotId, groupKey])
+}
+
+model BaselineModelVersion {
+  id          String         @id @default(cuid())
+  versionName String         @unique
+  description String
+  status      ModelStatus    @default(DRAFT)
+  rulesetJson Json
+  createdBy   String?
+  createdAt   DateTime       @default(now())
+  scenarios   Scenario[]
+  runs        SimulationRun[]
+
+  @@index([status, createdAt(sort: Desc)])
+}
+
+model Scenario {
+  id               String               @id @default(cuid())
+  name             String
+  templateType     String
+  description      String?
+  snapshotIdDefault String?
+  modelVersionId   String
+  parameterJson    Json
+  createdBy        String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  snapshotDefault  DatasetSnapshot?     @relation(fields: [snapshotIdDefault], references: [id])
+  modelVersion     BaselineModelVersion @relation(fields: [modelVersionId], references: [id], onDelete: Restrict)
+  runs             SimulationRun[]
+
+  @@index([modelVersionId, createdAt(sort: Desc)])
+  @@index([snapshotIdDefault])
+}
+
+model SimulationRun {
+  id              String               @id @default(cuid())
+  scenarioId      String
+  snapshotId      String
+  modelVersionId  String
+  status          RunStatus            @default(QUEUED)
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdBy       String?
+  engineVersion   String?
+  seedHash        String?
+  runNotes        String?
+  createdAt       DateTime             @default(now())
+  scenario        Scenario             @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  snapshot        DatasetSnapshot      @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  modelVersion    BaselineModelVersion @relation(fields: [modelVersionId], references: [id], onDelete: Restrict)
+  summaryMetrics  RunSummaryMetric[]
+  timeSeries      RunTimeSeries[]
+  segmentMetrics  RunSegmentMetric[]
+  flags           RunFlag[]
+  decisionPacks   DecisionPack[]
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([scenarioId, createdAt(sort: Desc)])
+}
+
+model RunSummaryMetric {
+  id         String        @id @default(cuid())
+  runId      String
+  metricKey  String
+  metricValue Float
+  metricUnit String?
+  run        SimulationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, metricKey])
+}
+
+model RunTimeSeries {
+  id          String        @id @default(cuid())
+  runId       String
+  periodKey   String
+  metricKey   String
+  metricValue Float
+  run         SimulationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, metricKey])
+}
+
+model RunSegmentMetric {
+  id          String        @id @default(cuid())
+  runId       String
+  segmentType String
+  segmentKey  String
+  metricKey   String
+  metricValue Float
+  run         SimulationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, segmentType, segmentKey])
+}
+
+model RunFlag {
+  id        String        @id @default(cuid())
+  runId     String
+  flagType  String
+  severity  String
+  message   String
+  periodKey String?
+  run       SimulationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+}
+
+model DecisionPack {
+  id                 String        @id @default(cuid())
+  runId              String?
+  compareSignature   String?
+  title              String
+  recommendationJson Json
+  exportStatus       ExportStatus  @default(DRAFT)
+  createdBy          String?
+  createdAt          DateTime      @default(now())
+  run                SimulationRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt(sort: Desc)])
+}
+
+model AuditEvent {
+  id          String   @id @default(cuid())
+  actorUserId String?
+  entityType  String
+  entityId    String
+  action      String
+  metadataJson Json
+  createdAt   DateTime @default(now())
+  actor       User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt(sort: Desc)])
+  @@index([entityType, entityId, createdAt(sort: Desc)])
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@bgc-alpha/config",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "echo 'No build step for @bgc-alpha/config'",
+    "typecheck": "echo 'No typecheck step for @bgc-alpha/config'",
+    "lint": "echo 'No lint step for @bgc-alpha/config'",
+    "test": "echo 'No tests yet for @bgc-alpha/config'"
+  }
+}

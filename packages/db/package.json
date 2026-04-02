@@ -1,0 +1,24 @@
+{
+  "name": "@bgc-alpha/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test": "echo 'No tests yet for @bgc-alpha/db'",
+    "prisma:generate": "prisma generate --schema=./prisma/schema.prisma",
+    "prisma:push": "prisma db push --schema=./prisma/schema.prisma"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.1.0"
+  },
+  "devDependencies": {
+    "prisma": "^6.1.0",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,0 +1,4 @@
+period_key,member_key,source_system,member_tier,group_key,pc_volume,sp_reward_basis,global_reward_usd,pool_reward_usd,cashout_usd,sink_spend_usd,active_member,recognized_revenue_usd,gross_margin_usd,member_join_period,is_affiliate,cross_app_active
+2025-01,MEMBER-001,bgc,starter,GROUP-A,1200,180,42,18,10,36,true,68,21,2024-11,false,false
+2025-01,MEMBER-002,iblooming,builder,GROUP-A,860,95,24,11,6,20,true,44,14,2024-10,true,true
+2025-02,MEMBER-001,bgc,starter,GROUP-A,980,140,36,14,8,28,true,55,17,2024-11,false,false

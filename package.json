@@ -1,0 +1,32 @@
+{
+  "name": "bgc-alpha-simulator",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "turbo dev --parallel",
+    "build": "turbo build",
+    "typecheck": "turbo typecheck",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "format": "prettier --check .",
+    "db:up": "bash ./scripts/db-up.sh",
+    "db:down": "bash ./scripts/db-down.sh",
+    "db:generate": "pnpm --filter @bgc-alpha/db prisma:generate",
+    "db:push": "bash ./scripts/db-push.sh",
+    "dev:setup": "bash ./scripts/dev-setup.sh",
+    "seed:users": "bash ./scripts/seed-users-sql.sh",
+    "seed:model": "bash ./scripts/seed-model-sql.sh",
+    "calibrate:snapshot": "tsx --env-file=.env scripts/calibrate-snapshot.ts",
+    "snapshot:import": "tsx --env-file=.env scripts/import-snapshot.ts",
+    "snapshot:queue-import": "tsx --env-file=.env scripts/queue-snapshot-import.ts",
+    "snapshot:build-bgc-bundle": "tsx scripts/build-bgc-source-bundle.ts",
+    "snapshot:verify-bgc-bundle": "tsx scripts/verify-bgc-source-bundle.ts"
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "tsx": "^4.19.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}

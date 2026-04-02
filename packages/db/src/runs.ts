@@ -1,0 +1,231 @@
+import type { Prisma } from "@prisma/client";
+import { RunStatus } from "@prisma/client";
+
+import { prisma } from "./client";
+
+type CreateSimulationRunInput = {
+  scenarioId: string;
+  snapshotId: string;
+  modelVersionId: string;
+  createdBy?: string | null;
+  engineVersion?: string | null;
+  seedHash?: string | null;
+};
+
+type PersistCompletedRunInput = {
+  summaryMetrics: Record<string, number>;
+  timeSeriesMetrics: Array<{
+    period_key: string;
+    metric_key: string;
+    metric_value: number;
+  }>;
+  segmentMetrics: Array<{
+    segment_type: string;
+    segment_key: string;
+    metric_key: string;
+    metric_value: number;
+  }>;
+  flags: Array<{
+    flag_type: string;
+    severity: string;
+    message: string;
+    period_key?: string | null;
+  }>;
+  recommendationSignals: Prisma.InputJsonValue;
+  runNotes?: string | null;
+};
+
+const runInclude = {
+  scenario: true,
+  snapshot: true,
+  modelVersion: true,
+  summaryMetrics: {
+    orderBy: {
+      metricKey: "asc" as const
+    }
+  },
+  timeSeries: {
+    orderBy: [
+      {
+        periodKey: "asc" as const
+      },
+      {
+        metricKey: "asc" as const
+      }
+    ]
+  },
+  segmentMetrics: {
+    orderBy: [
+      {
+        segmentType: "asc" as const
+      },
+      {
+        segmentKey: "asc" as const
+      },
+      {
+        metricKey: "asc" as const
+      }
+    ]
+  },
+  flags: {
+    orderBy: [
+      {
+        severity: "asc" as const
+      },
+      {
+        flagType: "asc" as const
+      }
+    ]
+  },
+  decisionPacks: {
+    orderBy: {
+      createdAt: "desc" as const
+    }
+  }
+};
+
+export async function listRuns() {
+  return prisma.simulationRun.findMany({
+    include: runInclude,
+    orderBy: {
+      createdAt: "desc"
+    }
+  });
+}
+
+export async function listCompletedRuns() {
+  return prisma.simulationRun.findMany({
+    where: {
+      status: RunStatus.COMPLETED
+    },
+    include: runInclude,
+    orderBy: {
+      completedAt: "desc"
+    }
+  });
+}
+
+export async function getRunById(runId: string) {
+  return prisma.simulationRun.findUnique({
+    where: {
+      id: runId
+    },
+    include: runInclude
+  });
+}
+
+export async function createSimulationRun(input: CreateSimulationRunInput) {
+  return prisma.simulationRun.create({
+    data: {
+      scenarioId: input.scenarioId,
+      snapshotId: input.snapshotId,
+      modelVersionId: input.modelVersionId,
+      createdBy: input.createdBy ?? null,
+      engineVersion: input.engineVersion ?? null,
+      seedHash: input.seedHash ?? null,
+      status: RunStatus.QUEUED
+    },
+    include: runInclude
+  });
+}
+
+export async function markRunStarted(runId: string) {
+  return prisma.simulationRun.update({
+    where: {
+      id: runId
+    },
+    data: {
+      status: RunStatus.RUNNING,
+      startedAt: new Date()
+    }
+  });
+}
+
+export async function persistCompletedRun(runId: string, input: PersistCompletedRunInput) {
+  return prisma.$transaction(async (tx) => {
+    await tx.runSummaryMetric.deleteMany({
+      where: {
+        runId
+      }
+    });
+    await tx.runTimeSeries.deleteMany({
+      where: {
+        runId
+      }
+    });
+    await tx.runSegmentMetric.deleteMany({
+      where: {
+        runId
+      }
+    });
+    await tx.runFlag.deleteMany({
+      where: {
+        runId
+      }
+    });
+
+    await tx.runSummaryMetric.createMany({
+      data: Object.entries(input.summaryMetrics).map(([metricKey, metricValue]) => ({
+        runId,
+        metricKey,
+        metricValue
+      }))
+    });
+
+    await tx.runTimeSeries.createMany({
+      data: input.timeSeriesMetrics.map((metric) => ({
+        runId,
+        periodKey: metric.period_key,
+        metricKey: metric.metric_key,
+        metricValue: metric.metric_value
+      }))
+    });
+
+    await tx.runSegmentMetric.createMany({
+      data: input.segmentMetrics.map((metric) => ({
+        runId,
+        segmentType: metric.segment_type,
+        segmentKey: metric.segment_key,
+        metricKey: metric.metric_key,
+        metricValue: metric.metric_value
+      }))
+    });
+
+    if (input.flags.length > 0) {
+      await tx.runFlag.createMany({
+        data: input.flags.map((flag) => ({
+          runId,
+          flagType: flag.flag_type,
+          severity: flag.severity,
+          message: flag.message,
+          periodKey: flag.period_key ?? null
+        }))
+      });
+    }
+
+    return tx.simulationRun.update({
+      where: {
+        id: runId
+      },
+      data: {
+        status: RunStatus.COMPLETED,
+        completedAt: new Date(),
+        runNotes: input.runNotes ?? null
+      },
+      include: runInclude
+    });
+  });
+}
+
+export async function markRunFailed(runId: string, message: string) {
+  return prisma.simulationRun.update({
+    where: {
+      id: runId
+    },
+    data: {
+      status: RunStatus.FAILED,
+      completedAt: new Date(),
+      runNotes: message
+    }
+  });
+}

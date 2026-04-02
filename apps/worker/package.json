@@ -1,0 +1,27 @@
+{
+  "name": "@bgc-alpha/worker",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "tsx watch --env-file=../../.env src/index.ts",
+    "build": "tsc --project tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@bgc-alpha/baseline-model": "workspace:*",
+    "@bgc-alpha/db": "workspace:*",
+    "@bgc-alpha/exports": "workspace:*",
+    "@bgc-alpha/schemas": "workspace:*",
+    "@bgc-alpha/simulation-core": "workspace:*",
+    "pg-boss": "^10.1.6",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
