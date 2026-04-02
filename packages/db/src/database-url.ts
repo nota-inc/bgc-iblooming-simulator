@@ -36,6 +36,27 @@ function parseHostname(connectionString: string) {
   }
 }
 
+function normalizePostgresSslMode(connectionString: string) {
+  try {
+    const url = new URL(connectionString);
+    const currentSslMode = url.searchParams.get("sslmode");
+    const usesLibpqCompat = url.searchParams.get("uselibpqcompat") === "true";
+
+    if (!currentSslMode || usesLibpqCompat) {
+      return connectionString;
+    }
+
+    if (["prefer", "require", "verify-ca"].includes(currentSslMode)) {
+      url.searchParams.set("sslmode", "verify-full");
+      return url.toString();
+    }
+
+    return connectionString;
+  } catch {
+    return connectionString;
+  }
+}
+
 function isLocalDatabaseUrl(connectionString: string) {
   const hostname = parseHostname(connectionString);
   return hostname ? LOCAL_DATABASE_HOSTS.has(hostname) : false;
@@ -63,13 +84,13 @@ export function resolveDatabaseUrl(mode: DatabaseUrlMode, consumer: string) {
   const configuredUrl = normalizeEnvValue(process.env.DATABASE_URL);
 
   if (configuredUrl && !shouldRejectConfiguredUrl(configuredUrl)) {
-    return configuredUrl;
+    return mode === "postgres" ? normalizePostgresSslMode(configuredUrl) : configuredUrl;
   }
 
   const fallback = getFallbackDatabaseUrl(mode);
   if (fallback) {
     process.env.DATABASE_URL = fallback.value;
-    return fallback.value;
+    return mode === "postgres" ? normalizePostgresSslMode(fallback.value) : fallback.value;
   }
 
   if (!configuredUrl) {
