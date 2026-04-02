@@ -202,7 +202,63 @@ export async function processSimulationRun(runId: string) {
 
   if (run.status === "COMPLETED") {
     if (!run.decisionPacks[0]) {
-      await generateDecisionPackForRun(runId, [], []);
+      const facts = await listSnapshotMemberMonthFacts(run.snapshotId);
+      const baselineModel = resolveBaselineModelRuleset(
+        run.modelVersion.rulesetJson,
+        run.modelVersion.versionName
+      );
+      const input: SimulationRunRequest = {
+        snapshotId: run.snapshotId,
+        baselineModelVersionId: run.modelVersionId,
+        scenario: {
+          id: run.scenario.id,
+          name: run.scenario.name,
+          template: run.scenario.templateType as "Baseline" | "Conservative" | "Growth" | "Stress",
+          parameters: scenarioParametersSchema.parse(run.scenario.parameterJson)
+        }
+      };
+      const result = simulateScenario({
+        request: input,
+        facts: facts.map((fact) => ({
+          ...(readMetadataRecord(fact.metadataJson)
+            ? {
+                recognizedRevenueUsd: readOptionalNumber(
+                  readMetadataRecord(fact.metadataJson)?.recognizedRevenueUsd
+                ),
+                grossMarginUsd: readOptionalNumber(
+                  readMetadataRecord(fact.metadataJson)?.grossMarginUsd
+                ),
+                memberJoinPeriod: readOptionalString(
+                  readMetadataRecord(fact.metadataJson)?.memberJoinPeriod
+                ),
+                isAffiliate: readOptionalBoolean(readMetadataRecord(fact.metadataJson)?.isAffiliate),
+                crossAppActive: readOptionalBoolean(
+                  readMetadataRecord(fact.metadataJson)?.crossAppActive
+                )
+              }
+            : {}),
+          periodKey: fact.periodKey,
+          memberKey: fact.memberKey,
+          sourceSystem: fact.sourceSystem,
+          memberTier: fact.memberTier,
+          groupKey: fact.groupKey,
+          pcVolume: fact.pcVolume,
+          spRewardBasis: fact.spRewardBasis,
+          globalRewardUsd: fact.globalRewardUsd,
+          poolRewardUsd: fact.poolRewardUsd,
+          cashoutUsd: fact.cashoutUsd,
+          sinkSpendUsd: fact.sinkSpendUsd,
+          activeMember: fact.activeMember
+        })),
+        baselineModel
+      });
+
+      await generateDecisionPackForRun(
+        runId,
+        result.strategic_objectives as StrategicObjectiveScorecard[],
+        result.milestone_evaluations as MilestoneEvaluation[]
+      );
+
       return getRunById(runId);
     }
 

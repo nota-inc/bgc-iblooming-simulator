@@ -1,4 +1,4 @@
-import { listCompletedRuns } from "@bgc-alpha/db";
+import { listCompletedRuns, processSimulationRun } from "@bgc-alpha/db";
 import { hasDatabaseUrl } from "@bgc-alpha/db/database-url";
 import { PageHeader } from "@bgc-alpha/ui";
 
@@ -32,7 +32,16 @@ const metricOptimization: Record<string, "lower" | "higher"> = {
 export default async function ComparePage() {
   await requirePageUser(["compare.read"]);
   const databaseConfigured = hasDatabaseUrl();
-  const runs = databaseConfigured ? await listCompletedRuns() : [];
+  let runs = databaseConfigured ? await listCompletedRuns() : [];
+
+  if (databaseConfigured && process.env.VERCEL) {
+    const runsMissingDecisionPack = runs.filter((run) => !run.decisionPacks[0]);
+
+    if (runsMissingDecisionPack.length > 0) {
+      await Promise.all(runsMissingDecisionPack.map((run) => processSimulationRun(run.id)));
+      runs = await listCompletedRuns();
+    }
+  }
 
   // Pre-compute extras on the server (these depend on server-only JSON parsing)
   const runExtras = runs.map((run) => {
