@@ -17,6 +17,7 @@
     "./snapshot-storage": "./src/snapshot-storage.ts"
   },
   "dependencies": {
+    "@bgc-alpha/schemas": "workspace:*",
     "@prisma/client": "^6.1.0"
   },
   "devDependencies": {

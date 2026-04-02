@@ -8,6 +8,7 @@ type SnapshotForValidation = {
   dateFrom: Date;
   dateTo: Date;
   recordCount: number | null;
+  importedFactCount: number;
   fileUri: string;
   sourceSystems: string[];
 };
@@ -26,11 +27,24 @@ export function validateSnapshot(snapshot: SnapshotForValidation) {
     });
   }
 
-  if (!snapshot.recordCount || snapshot.recordCount <= 0) {
+  if (snapshot.importedFactCount <= 0) {
     issues.push({
       severity: "ERROR",
-      issueType: "record_count_missing",
-      message: "Snapshot record count must be greater than zero before validation can pass."
+      issueType: "import_not_completed",
+      message: "Import rows into the snapshot before validation can pass."
+    });
+  }
+
+  if (
+    snapshot.recordCount !== null &&
+    snapshot.recordCount > 0 &&
+    snapshot.importedFactCount > 0 &&
+    snapshot.recordCount !== snapshot.importedFactCount
+  ) {
+    issues.push({
+      severity: "WARNING",
+      issueType: "record_count_mismatch",
+      message: `Expected row count (${snapshot.recordCount}) does not match imported rows (${snapshot.importedFactCount}).`
     });
   }
 

@@ -28,6 +28,30 @@ export async function POST(
     );
   }
 
+  const latestImportRun = snapshot.importRuns[0];
+
+  if (latestImportRun && ["QUEUED", "RUNNING"].includes(latestImportRun.status)) {
+    return NextResponse.json(
+      {
+        error: "snapshot_import_in_progress"
+      },
+      {
+        status: 409
+      }
+    );
+  }
+
+  if (snapshot._count.memberMonthFacts === 0) {
+    return NextResponse.json(
+      {
+        error: "snapshot_has_no_imported_rows"
+      },
+      {
+        status: 400
+      }
+    );
+  }
+
   if (!["VALID", "APPROVED"].includes(snapshot.validationStatus)) {
     return NextResponse.json(
       {

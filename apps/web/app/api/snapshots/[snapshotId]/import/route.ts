@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { createSnapshotImportRun, getSnapshotById, writeAuditEvent } from "@bgc-alpha/db";
+import {
+  createSnapshotImportRun,
+  getSnapshotById,
+  processSnapshotImportRun,
+  writeAuditEvent
+} from "@bgc-alpha/db";
 
 import { authorizeApiRequest } from "@/lib/auth-session";
 import { enqueueJob } from "@/lib/queue";
@@ -17,6 +22,7 @@ export async function POST(
 
   const { snapshotId } = await params;
   const snapshot = await getSnapshotById(snapshotId);
+  const shouldProcessInline = Boolean(process.env.VERCEL);
 
   if (!snapshot) {
     return NextResponse.json(
@@ -31,7 +37,54 @@ export async function POST(
 
   const latestImportRun = snapshot.importRuns[0];
 
-  if (latestImportRun && ["QUEUED", "RUNNING"].includes(latestImportRun.status)) {
+  if (latestImportRun?.status === "RUNNING") {
+    return NextResponse.json(
+      {
+        error: "snapshot_import_already_running"
+      },
+      {
+        status: 409
+      }
+    );
+  }
+
+  if (shouldProcessInline) {
+    const importRun =
+      latestImportRun?.status === "QUEUED"
+        ? latestImportRun
+        : await createSnapshotImportRun({
+            snapshotId: snapshot.id,
+            fileUri: snapshot.fileUri,
+            requestedByUserId: authResult.user.id
+          });
+
+    if (latestImportRun?.status !== "QUEUED") {
+      await writeAuditEvent({
+        actorUserId: authResult.user.id,
+        entityType: "dataset_snapshot",
+        entityId: snapshot.id,
+        action: "snapshot.import_started_inline",
+        metadata: {
+          importRunId: importRun.id,
+          fileUri: snapshot.fileUri
+        }
+      });
+    }
+
+    const result = await processSnapshotImportRun(importRun.id);
+
+    return NextResponse.json(
+      {
+        importRun: result.importRun,
+        ...(result.ok ? {} : { error: result.reason })
+      },
+      {
+        status: result.ok ? 200 : 422
+      }
+    );
+  }
+
+  if (latestImportRun?.status === "QUEUED") {
     return NextResponse.json(
       {
         error: "snapshot_import_already_running"

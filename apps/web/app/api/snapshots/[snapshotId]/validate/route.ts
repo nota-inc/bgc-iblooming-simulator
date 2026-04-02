@@ -34,10 +34,35 @@ export async function POST(
     );
   }
 
+  const latestImportRun = snapshot.importRuns[0];
+
+  if (latestImportRun && ["QUEUED", "RUNNING"].includes(latestImportRun.status)) {
+    return NextResponse.json(
+      {
+        error: "snapshot_import_in_progress"
+      },
+      {
+        status: 409
+      }
+    );
+  }
+
+  if (snapshot._count.memberMonthFacts === 0) {
+    return NextResponse.json(
+      {
+        error: "snapshot_has_no_imported_rows"
+      },
+      {
+        status: 400
+      }
+    );
+  }
+
   await markSnapshotValidating(snapshotId);
 
   const issues = validateSnapshot({
     ...snapshot,
+    importedFactCount: snapshot._count.memberMonthFacts,
     sourceSystems: Array.isArray(snapshot.sourceSystems)
       ? snapshot.sourceSystems.map((value) => String(value))
       : []

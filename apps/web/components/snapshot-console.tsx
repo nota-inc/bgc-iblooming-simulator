@@ -59,6 +59,14 @@ type SnapshotConsoleProps = {
   user: AppSessionUser;
 };
 
+type ImportResponse = {
+  error?: string;
+  importRun?: {
+    status: string;
+    rowCountImported: number | null;
+  };
+};
+
 const defaultFormState = {
   name: "",
   sourceSystems: "bgc, iblooming",
@@ -94,6 +102,39 @@ function getProgressSteps(snapshot: SnapshotRecord) {
     { label: "Validated", done: validated, active: validating },
     { label: "Approved", done: approved, active: false },
   ];
+}
+
+function getSnapshotValidationErrorMessage(errorCode: string | undefined, snapshotName: string) {
+  switch (errorCode) {
+    case "snapshot_import_in_progress":
+      return `${snapshotName} is still importing. Wait for the import to finish first.`;
+    case "snapshot_has_no_imported_rows":
+      return `Import rows into ${snapshotName} before validating it.`;
+    default:
+      return `Validation failed for ${snapshotName}.`;
+  }
+}
+
+function getSnapshotApprovalErrorMessage(errorCode: string | undefined, snapshotName: string) {
+  switch (errorCode) {
+    case "snapshot_import_in_progress":
+      return `${snapshotName} is still importing. Wait for the import to finish first.`;
+    case "snapshot_has_no_imported_rows":
+      return `Import rows into ${snapshotName} before approving it.`;
+    case "snapshot_not_approvable":
+      return `Validate ${snapshotName} successfully before approving it.`;
+    default:
+      return `Approval failed for ${snapshotName}.`;
+  }
+}
+
+function getSnapshotImportErrorMessage(errorCode: string | undefined, snapshotName: string) {
+  switch (errorCode) {
+    case "snapshot_import_already_running":
+      return `${snapshotName} is already importing.`;
+    default:
+      return `Import failed for ${snapshotName}.`;
+  }
 }
 
 export function SnapshotConsole({ snapshots, blobUploadsEnabled, user }: SnapshotConsoleProps) {
@@ -381,11 +422,22 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, user }: Snapsho
                 <div className="snapshot-card-actions">
                   <button
                     className="ghost-button"
-                    disabled={!canWrite || isPending || ["QUEUED", "RUNNING"].includes(snapshot.latestImportRun?.status ?? "")}
+                    disabled={!canWrite || isPending || snapshot.latestImportRun?.status === "RUNNING"}
                     onClick={() => {
                       startTransition(async () => {
                         const response = await fetch(`/api/snapshots/${snapshot.id}/import`, { method: "POST" });
-                        setMessage(response.ok ? `Import queued for ${snapshot.name}.` : `Import failed for ${snapshot.name}.`);
+                        const payload = (await response.json().catch(() => null)) as ImportResponse | null;
+                        if (!response.ok) {
+                          setMessage(getSnapshotImportErrorMessage(payload?.error, snapshot.name));
+                          router.refresh();
+                          return;
+                        }
+
+                        setMessage(
+                          payload?.importRun?.status === "COMPLETED"
+                            ? `Imported ${snapshot.name}.`
+                            : `Import queued for ${snapshot.name}.`
+                        );
                         router.refresh();
                       });
                     }}
@@ -395,11 +447,21 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, user }: Snapsho
                   </button>
                   <button
                     className="ghost-button"
-                    disabled={!canValidate || isPending}
+                    disabled={
+                      !canValidate ||
+                      isPending ||
+                      snapshot.importedFactCount === 0 ||
+                      ["QUEUED", "RUNNING"].includes(snapshot.latestImportRun?.status ?? "")
+                    }
                     onClick={() => {
                       startTransition(async () => {
                         const response = await fetch(`/api/snapshots/${snapshot.id}/validate`, { method: "POST" });
-                        setMessage(response.ok ? `Validated ${snapshot.name}.` : `Validation failed for ${snapshot.name}.`);
+                        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+                        setMessage(
+                          response.ok
+                            ? `Validated ${snapshot.name}.`
+                            : getSnapshotValidationErrorMessage(payload?.error, snapshot.name)
+                        );
                         router.refresh();
                       });
                     }}
@@ -409,11 +471,22 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, user }: Snapsho
                   </button>
                   <button
                     className="ghost-button"
-                    disabled={!canApprove || isPending || !["VALID", "APPROVED"].includes(snapshot.validationStatus)}
+                    disabled={
+                      !canApprove ||
+                      isPending ||
+                      snapshot.importedFactCount === 0 ||
+                      ["QUEUED", "RUNNING"].includes(snapshot.latestImportRun?.status ?? "") ||
+                      !["VALID", "APPROVED"].includes(snapshot.validationStatus)
+                    }
                     onClick={() => {
                       startTransition(async () => {
                         const response = await fetch(`/api/snapshots/${snapshot.id}/approve`, { method: "POST" });
-                        setMessage(response.ok ? `${snapshot.name} approved.` : `Approval failed.`);
+                        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+                        setMessage(
+                          response.ok
+                            ? `${snapshot.name} approved.`
+                            : getSnapshotApprovalErrorMessage(payload?.error, snapshot.name)
+                        );
                         router.refresh();
                       });
                     }}
