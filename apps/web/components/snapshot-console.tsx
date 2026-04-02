@@ -328,7 +328,7 @@ export function SnapshotConsole({ snapshots, user }: SnapshotConsoleProps) {
                   </div>
                 ) : null}
 
-                {/* Actions */}
+                {/* Workflow Actions */}
                 <div className="snapshot-card-actions">
                   <button
                     className="ghost-button"
@@ -373,6 +373,33 @@ export function SnapshotConsole({ snapshots, user }: SnapshotConsoleProps) {
                     Approve
                   </button>
                 </div>
+
+                {/* Export Action */}
+                {snapshot.importedFactCount > 0 ? (
+                  <div className="snapshot-card-export">
+                    <button
+                      className="ghost-button snapshot-export-btn"
+                      disabled={isPending}
+                      onClick={() => {
+                        const link = document.createElement("a");
+                        link.href = `/api/snapshots/${snapshot.id}/export`;
+                        link.download = "";
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        setMessage(`Exporting data for ${snapshot.name}...`);
+                      }}
+                      type="button"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                      Export Data
+                    </button>
+                  </div>
+                ) : null}
               </div>
             );
           })}

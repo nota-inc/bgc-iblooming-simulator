@@ -5,7 +5,6 @@ import { useCallback, useState, useTransition } from "react";
 
 import {
   scenarioCohortAssumptionsSchema,
-  scenarioMilestoneScheduleItemSchema,
   type ScenarioCohortAssumptions,
   type ScenarioMilestoneScheduleItem,
   type ScenarioParameters
@@ -128,15 +127,7 @@ const templateDescriptions: Record<ScenarioRecord["templateType"], string> = {
   Stress: "Restrictive settings to test worst-case treasury drain"
 };
 
-function formatMilestoneSchedule(schedule: ScenarioMilestoneScheduleItem[]) {
-  return schedule.length > 0 ? JSON.stringify(schedule, null, 2) : "[]";
-}
 
-function parseMilestoneScheduleJson(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return [];
-  return scenarioMilestoneScheduleItemSchema.array().parse(JSON.parse(trimmed));
-}
 
 function ChevronIcon() {
   return (
@@ -211,7 +202,7 @@ export function ScenarioConsole({ scenarios, snapshots, baselineModels, user }: 
       snapshotIdDefault: "",
       modelVersionId: activeModel?.id ?? "",
       parameters: templateDefaults.Baseline,
-      milestoneScheduleJson: formatMilestoneSchedule(templateDefaults.Baseline.milestone_schedule)
+      milestones: [...templateDefaults.Baseline.milestone_schedule]
     };
   });
 
@@ -230,7 +221,7 @@ export function ScenarioConsole({ scenarios, snapshots, baselineModels, user }: 
     const activeModel = baselineModels.find((i) => i.status === "ACTIVE") ?? baselineModels[0];
     setEditingScenarioId(null);
     setShowForm(false);
-    setFormState({ name: "", templateType: "Baseline", description: "", snapshotIdDefault: "", modelVersionId: activeModel?.id ?? "", parameters: templateDefaults.Baseline, milestoneScheduleJson: formatMilestoneSchedule(templateDefaults.Baseline.milestone_schedule) });
+    setFormState({ name: "", templateType: "Baseline", description: "", snapshotIdDefault: "", modelVersionId: activeModel?.id ?? "", parameters: templateDefaults.Baseline, milestones: [...templateDefaults.Baseline.milestone_schedule] });
   }
 
   function startEdit(scenario: ScenarioRecord) {
@@ -243,7 +234,7 @@ export function ScenarioConsole({ scenarios, snapshots, baselineModels, user }: 
       snapshotIdDefault: scenario.snapshotIdDefault ?? "",
       modelVersionId: scenario.modelVersionId,
       parameters: scenario.parameterJson,
-      milestoneScheduleJson: formatMilestoneSchedule(scenario.parameterJson.milestone_schedule)
+      milestones: [...scenario.parameterJson.milestone_schedule]
     });
   }
 
@@ -287,7 +278,7 @@ export function ScenarioConsole({ scenarios, snapshots, baselineModels, user }: 
                       ...c,
                       templateType: template,
                       parameters: templateDefaults[template],
-                      milestoneScheduleJson: formatMilestoneSchedule(templateDefaults[template].milestone_schedule)
+                      milestones: [...templateDefaults[template].milestone_schedule]
                     }));
                   }}
                   type="button"
@@ -305,8 +296,7 @@ export function ScenarioConsole({ scenarios, snapshots, baselineModels, user }: 
                 event.preventDefault();
                 setMessage(null);
                 startTransition(async () => {
-                  let milestoneSchedule: ScenarioMilestoneScheduleItem[] = [];
-                  try { milestoneSchedule = parseMilestoneScheduleJson(formState.milestoneScheduleJson); } catch { setMessage("Invalid milestone schedule JSON."); return; }
+                  const milestoneSchedule = formState.milestones;
                   const endpoint = editingScenarioId ? `/api/scenarios/${editingScenarioId}` : "/api/scenarios";
                   const method = editingScenarioId ? "PATCH" : "POST";
                   const response = await fetch(endpoint, {
@@ -443,7 +433,7 @@ export function ScenarioConsole({ scenarios, snapshots, baselineModels, user }: 
               <div className="accordion-section" data-open={openSections.has("advanced")}>
                 <button className="accordion-header" onClick={() => toggleSection("advanced")} type="button">
                   Advanced
-                  <span className="accordion-summary">{p.projection_horizon_months ? `${p.projection_horizon_months}mo` : "Auto"} · {p.milestone_schedule.length} milestones</span>
+                  <span className="accordion-summary">{p.projection_horizon_months ? `${p.projection_horizon_months}mo` : "Auto"} · {formState.milestones.length} milestones</span>
                   <ChevronIcon />
                 </button>
                 {openSections.has("advanced") ? (
@@ -453,11 +443,111 @@ export function ScenarioConsole({ scenarios, snapshots, baselineModels, user }: 
                       <small>Leave empty to use the default from the data range.</small>
                       <input disabled={!canWrite || isPending} min="1" onChange={(e) => setFormState(c => ({ ...c, parameters: { ...c.parameters, projection_horizon_months: e.target.value ? Number(e.target.value) : null } }))} type="text" inputMode="numeric" pattern="[0-9]*" value={p.projection_horizon_months ?? ""} />
                     </label>
-                    <label className="field">
-                      <span>Milestone schedule (JSON)</span>
-                      <small>Define staged policy changes over time.</small>
-                      <textarea disabled={!canWrite || isPending} onChange={(e) => setFormState(c => ({ ...c, milestoneScheduleJson: e.target.value }))} rows={5} value={formState.milestoneScheduleJson} style={{ fontFamily: "monospace", fontSize: "0.8rem" }} />
-                    </label>
+                    <div className="milestone-editor">
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                        <div>
+                          <span style={{ fontWeight: 500, fontSize: "0.8rem", color: "var(--text-secondary)" }}>Milestone schedule</span>
+                          <small style={{ display: "block", fontSize: "0.75rem", color: "var(--text-tertiary)", lineHeight: 1.4 }}>Define staged policy changes over time.</small>
+                        </div>
+                        <button
+                          className="ghost-button"
+                          disabled={!canWrite || isPending}
+                          onClick={() => {
+                            const nextIdx = formState.milestones.length + 1;
+                            const lastMs = formState.milestones[formState.milestones.length - 1];
+                            const nextStart = lastMs ? (lastMs.end_month ?? lastMs.start_month) + 1 : 1;
+                            setFormState(c => ({
+                              ...c,
+                              milestones: [...c.milestones, {
+                                milestone_key: `m${nextIdx}`,
+                                label: `M${nextIdx}`,
+                                start_month: nextStart,
+                                end_month: null,
+                                parameter_overrides: {}
+                              }]
+                            }));
+                          }}
+                          type="button"
+                          style={{ fontSize: "0.72rem", padding: "0.3rem 0.6rem" }}
+                        >
+                          + Add Milestone
+                        </button>
+                      </div>
+                      {formState.milestones.length === 0 ? (
+                        <p className="muted" style={{ fontSize: "0.78rem", margin: 0 }}>No milestones defined. Click "+ Add Milestone" to create one.</p>
+                      ) : (
+                        <div className="milestone-list">
+                          {formState.milestones.map((ms, idx) => (
+                            <div className="milestone-row" key={idx}>
+                              <div className="milestone-row-fields">
+                                <label className="field">
+                                  <span>Key</span>
+                                  <input
+                                    disabled={!canWrite || isPending}
+                                    value={ms.milestone_key}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setFormState(c => ({ ...c, milestones: c.milestones.map((m, i) => i === idx ? { ...m, milestone_key: val } : m) }));
+                                    }}
+                                    placeholder="m1"
+                                  />
+                                </label>
+                                <label className="field">
+                                  <span>Label</span>
+                                  <input
+                                    disabled={!canWrite || isPending}
+                                    value={ms.label}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setFormState(c => ({ ...c, milestones: c.milestones.map((m, i) => i === idx ? { ...m, label: val } : m) }));
+                                    }}
+                                    placeholder="M1 - Stabilize"
+                                  />
+                                </label>
+                                <label className="field">
+                                  <span>Start month</span>
+                                  <input
+                                    disabled={!canWrite || isPending}
+                                    type="number"
+                                    min="1"
+                                    value={ms.start_month}
+                                    onChange={(e) => {
+                                      const val = Number(e.target.value);
+                                      setFormState(c => ({ ...c, milestones: c.milestones.map((m, i) => i === idx ? { ...m, start_month: val } : m) }));
+                                    }}
+                                  />
+                                </label>
+                                <label className="field">
+                                  <span>End month</span>
+                                  <input
+                                    disabled={!canWrite || isPending}
+                                    type="number"
+                                    min="1"
+                                    value={ms.end_month ?? ""}
+                                    onChange={(e) => {
+                                      const val = e.target.value ? Number(e.target.value) : null;
+                                      setFormState(c => ({ ...c, milestones: c.milestones.map((m, i) => i === idx ? { ...m, end_month: val } : m) }));
+                                    }}
+                                    placeholder="—"
+                                  />
+                                </label>
+                                <button
+                                  className="ghost-button milestone-remove-btn"
+                                  disabled={!canWrite || isPending}
+                                  onClick={() => {
+                                    setFormState(c => ({ ...c, milestones: c.milestones.filter((_, i) => i !== idx) }));
+                                  }}
+                                  type="button"
+                                  title="Remove milestone"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ) : null}
               </div>
