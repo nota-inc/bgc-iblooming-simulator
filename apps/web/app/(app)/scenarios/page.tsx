@@ -24,7 +24,7 @@ export default async function ScenariosPage() {
   return (
     <>
       <PageHeader
-        step={{ current: 2, total: 3, label: "Policy Configuration" }}
+        step={{ current: 2, total: 4, label: "Policy Configuration" }}
         title="Scenarios"
         description="Create ALPHA policy configurations with adjustable parameters and run simulations."
       />
@@ -47,6 +47,12 @@ export default async function ScenariosPage() {
         scenarios={scenarios.map((scenario) => ({
           ...scenario,
           templateType: toTemplateType(scenario.templateType),
+          latestRun: scenario.runs[0]
+            ? {
+                id: scenario.runs[0].id,
+                status: scenario.runs[0].status
+              }
+            : null,
           parameterJson: scenarioParametersSchema.parse(scenario.parameterJson),
           snapshotDefault: scenario.snapshotDefault
             ? {

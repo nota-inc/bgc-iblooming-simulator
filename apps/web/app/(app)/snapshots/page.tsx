@@ -14,7 +14,7 @@ export default async function SnapshotsPage() {
   return (
     <>
       <PageHeader
-        step={{ current: 1, total: 3, label: "Historical Data" }}
+        step={{ current: 1, total: 4, label: "Historical Data" }}
         title="Snapshots"
         description="Upload historical business data, validate it, and approve datasets for simulation."
       />

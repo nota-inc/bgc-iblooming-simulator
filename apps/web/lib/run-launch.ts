@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import {
-  createSimulationRun,
+  createSimulationRunIfUnique,
   getScenarioById,
   getSnapshotById,
   markRunFailed,
@@ -102,7 +102,7 @@ export async function launchSimulationRun({
       )
       .digest("hex");
 
-    const run = await createSimulationRun({
+    const createRunResult = await createSimulationRunIfUnique({
       scenarioId: scenario.id,
       snapshotId: snapshot.id,
       modelVersionId: scenario.modelVersionId,
@@ -110,6 +110,24 @@ export async function launchSimulationRun({
       engineVersion: process.env.SIMULATION_ENGINE_VERSION ?? "0.1.0",
       seedHash
     });
+
+    if (createRunResult.duplicateOf) {
+      return NextResponse.json(
+        {
+          error: "duplicate_run",
+          existingRunId: createRunResult.duplicateOf.id
+        },
+        {
+          status: 409
+        }
+      );
+    }
+
+    const run = createRunResult.run;
+
+    if (!run) {
+      throw new Error("run_creation_failed");
+    }
 
     runId = run.id;
 

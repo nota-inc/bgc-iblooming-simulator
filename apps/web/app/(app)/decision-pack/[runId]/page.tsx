@@ -110,13 +110,13 @@ export default async function DecisionPackPage({
             <Card className="span-4" title="Export">
               <div className="stack-links">
                 <a href={`/api/runs/${run.id}/decision-pack/export?format=markdown`}>
-                  📄 Download Markdown
+                  📄 Download Full Markdown
                 </a>
                 <a href={`/api/runs/${run.id}/decision-pack/export?format=csv`}>
-                  📊 Download CSV
+                  📊 Download Full CSV
                 </a>
                 <a href={`/api/runs/${run.id}/decision-pack/export?format=pdf`}>
-                  📋 Download PDF
+                  📋 Download Full PDF
                 </a>
               </div>
             </Card>

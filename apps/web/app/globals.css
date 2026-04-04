@@ -1485,6 +1485,8 @@ button, input, select, textarea { font: inherit; }
 }
 
 .selector-action-btn {
+  display: inline-flex;
+  align-items: center;
   padding: 0.3rem 0.6rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-full);
@@ -1493,6 +1495,7 @@ button, input, select, textarea { font: inherit; }
   font-size: 0.72rem;
   font-weight: 500;
   cursor: pointer;
+  text-decoration: none;
   transition: all var(--transition);
 }
 

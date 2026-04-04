@@ -84,9 +84,47 @@ const runInclude = {
   }
 };
 
+const duplicateBlockingStatuses = [
+  RunStatus.QUEUED,
+  RunStatus.RUNNING,
+  RunStatus.COMPLETED
+] as const;
+
 export async function listRuns() {
   return prisma.simulationRun.findMany({
     include: runInclude,
+    orderBy: {
+      createdAt: "desc"
+    }
+  });
+}
+
+export async function listRunReferences() {
+  return prisma.simulationRun.findMany({
+    select: {
+      id: true,
+      status: true,
+      createdAt: true,
+      completedAt: true,
+      scenario: {
+        select: {
+          id: true,
+          name: true
+        }
+      },
+      snapshot: {
+        select: {
+          id: true,
+          name: true
+        }
+      },
+      modelVersion: {
+        select: {
+          id: true,
+          versionName: true
+        }
+      }
+    },
     orderBy: {
       createdAt: "desc"
     }
@@ -102,6 +140,22 @@ export async function listCompletedRuns() {
     orderBy: {
       completedAt: "desc"
     }
+  });
+}
+
+export async function listCompletedRunsByIds(runIds: string[]) {
+  if (runIds.length === 0) {
+    return [];
+  }
+
+  return prisma.simulationRun.findMany({
+    where: {
+      id: {
+        in: runIds
+      },
+      status: RunStatus.COMPLETED
+    },
+    include: runInclude
   });
 }
 
@@ -126,6 +180,59 @@ export async function createSimulationRun(input: CreateSimulationRunInput) {
       status: RunStatus.QUEUED
     },
     include: runInclude
+  });
+}
+
+export async function createSimulationRunIfUnique(input: CreateSimulationRunInput) {
+  if (!input.seedHash) {
+    return {
+      duplicateOf: null,
+      run: await createSimulationRun(input)
+    };
+  }
+
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      SELECT pg_advisory_xact_lock(hashtextextended(${input.seedHash}, 0))
+    `;
+
+    const duplicateOf = await tx.simulationRun.findFirst({
+      where: {
+        seedHash: input.seedHash,
+        status: {
+          in: [...duplicateBlockingStatuses]
+        }
+      },
+      include: runInclude,
+      orderBy: {
+        createdAt: "desc"
+      }
+    });
+
+    if (duplicateOf) {
+      return {
+        duplicateOf,
+        run: null
+      };
+    }
+
+    const run = await tx.simulationRun.create({
+      data: {
+        scenarioId: input.scenarioId,
+        snapshotId: input.snapshotId,
+        modelVersionId: input.modelVersionId,
+        createdBy: input.createdBy ?? null,
+        engineVersion: input.engineVersion ?? null,
+        seedHash: input.seedHash,
+        status: RunStatus.QUEUED
+      },
+      include: runInclude
+    });
+
+    return {
+      duplicateOf: null,
+      run
+    };
   });
 }
 

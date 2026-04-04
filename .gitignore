@@ -17,3 +17,4 @@ apps/web/.vercel
 packages/db/prisma/dev.db
 storage/uploads/
 csv files from prof/
+tmp-simulation-result-sample.pdf

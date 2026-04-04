@@ -10,6 +10,7 @@ import {
   getRunReference,
   getRunStatusLabel
 } from "@/lib/common-language";
+import { compareRadarDimensions, compareSeriesColors } from "@/lib/compare-config";
 
 import { CompareRadarChart } from "./compare-radar-chart";
 
@@ -60,16 +61,6 @@ type CompareConsoleProps = {
 };
 
 /* ─── Constants ─── */
-
-const SERIES_COLORS = ["#10B981", "#6366F1", "#F59E0B", "#EF4444", "#A855F7", "#EC4899", "#14B8A6", "#8B5CF6"];
-
-const RADAR_DIMENSIONS = [
-  { key: "reserve_runway_months", name: "Treasury Safety", max: 24, invert: false },
-  { key: "reward_concentration_top10_pct", name: "Fairness", max: 100, invert: true },
-  { key: "sink_utilization_rate", name: "Internal Use", max: 100, invert: false },
-  { key: "alpha_issued_total", name: "Growth Support", max: 0, invert: false },
-  { key: "payout_inflow_ratio", name: "Cash-Out Risk", max: 2, invert: true },
-];
 
 function getVerdictBadge(status: string) {
   if (status === "candidate" || status === "approved") return "badge--candidate";
@@ -144,6 +135,16 @@ export function CompareConsole({
     [runExtras, selectedIds]
   );
 
+  const compareExportHref = useMemo(() => {
+    if (filteredRuns.length === 0) {
+      return null;
+    }
+
+    const params = new URLSearchParams();
+    filteredRuns.forEach((run) => params.append("runId", run.id));
+    return `/api/compare/export?${params.toString()}`;
+  }, [filteredRuns]);
+
   const milestoneRows = useMemo(() => {
     return [...new Set(
       filteredExtras.flatMap((e) =>
@@ -158,20 +159,20 @@ export function CompareConsole({
       const m = r.summaryMetrics.find((sm) => sm.metricKey === "alpha_issued_total");
       return m?.metricValue ?? 0;
     }));
-    const dimensions = RADAR_DIMENSIONS.map((d) => ({
+    const dimensions = compareRadarDimensions.map((d) => ({
       name: d.name,
-      max: d.key === "alpha_issued_total" ? maxIssued * 1.2 : d.max,
+      max: d.max === 0 ? maxIssued * 1.2 : d.max,
     }));
     const series = filteredRuns.map((run) => {
       const globalIdx = runs.findIndex((r) => r.id === run.id);
       const metrics = Object.fromEntries(run.summaryMetrics.map((m) => [m.metricKey, m.metricValue])) as Record<string, number>;
       return {
         name: runDisplayLabels.get(run.id) ?? run.scenario.name,
-        color: SERIES_COLORS[globalIdx % SERIES_COLORS.length],
-        values: RADAR_DIMENSIONS.map((d) => {
+        color: compareSeriesColors[globalIdx % compareSeriesColors.length],
+        values: compareRadarDimensions.map((d) => {
           const raw = metrics[d.key] ?? 0;
           if (d.invert) {
-            const maxVal = d.key === "alpha_issued_total" ? maxIssued * 1.2 : d.max;
+            const maxVal = d.max === 0 ? maxIssued * 1.2 : d.max;
             return Math.max(0, maxVal - raw);
           }
           return raw;
@@ -195,6 +196,11 @@ export function CompareConsole({
             <span className="scenario-selector-count">{selectedIds.size}/{runs.length}</span>
           </span>
           <div className="scenario-selector-actions">
+            {compareExportHref ? (
+              <a className="selector-action-btn" href={compareExportHref}>
+                Download PDF
+              </a>
+            ) : null}
             <button className="selector-action-btn" onClick={selectAll} type="button">Select All</button>
             <button className="selector-action-btn" onClick={clearToFirst} type="button">Reset</button>
           </div>
@@ -203,7 +209,7 @@ export function CompareConsole({
         <div className="scenario-chip-list">
           {runs.map((run, idx) => {
             const isSelected = selectedIds.has(run.id);
-            const color = SERIES_COLORS[idx % SERIES_COLORS.length];
+            const color = compareSeriesColors[idx % compareSeriesColors.length];
             return (
               <button
                 className="scenario-chip"
@@ -257,7 +263,7 @@ export function CompareConsole({
                       return (
                         <th key={run.id}>
                           <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
-                            <span className="scenario-chip-dot" style={{ background: SERIES_COLORS[globalIdx % SERIES_COLORS.length], width: "8px", height: "8px", opacity: 1 }} />
+                            <span className="scenario-chip-dot" style={{ background: compareSeriesColors[globalIdx % compareSeriesColors.length], width: "8px", height: "8px", opacity: 1 }} />
                             {runDisplayLabels.get(run.id) ?? run.scenario.name}
                           </span>
                         </th>

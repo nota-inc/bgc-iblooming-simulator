@@ -21,10 +21,17 @@ export const navigationItems = [
     step: 2
   },
   {
+    href: "/results",
+    label: "Result Ref",
+    description: "Saved run references",
+    icon: "results",
+    step: 3
+  },
+  {
     href: "/compare",
     label: "Compare",
     description: "Side-by-side results",
     icon: "columns",
-    step: 3
+    step: 4
   }
 ] as const;

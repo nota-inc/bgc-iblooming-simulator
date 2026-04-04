@@ -24,6 +24,18 @@ export async function listScenarios() {
             }
           }
         }
+      },
+      runs: {
+        take: 1,
+        orderBy: {
+          createdAt: "desc"
+        },
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          completedAt: true
+        }
       }
     },
     orderBy: {
@@ -46,6 +58,18 @@ export async function getScenarioById(scenarioId: string) {
               memberMonthFacts: true
             }
           }
+        }
+      },
+      runs: {
+        take: 1,
+        orderBy: {
+          createdAt: "desc"
+        },
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          completedAt: true
         }
       }
     }
@@ -72,6 +96,18 @@ export async function createScenario(input: ScenarioUpsertInput) {
               memberMonthFacts: true
             }
           }
+        }
+      },
+      runs: {
+        take: 1,
+        orderBy: {
+          createdAt: "desc"
+        },
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          completedAt: true
         }
       }
     }
@@ -103,6 +139,18 @@ export async function updateScenario(
               memberMonthFacts: true
             }
           }
+        }
+      },
+      runs: {
+        take: 1,
+        orderBy: {
+          createdAt: "desc"
+        },
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          completedAt: true
         }
       }
     }

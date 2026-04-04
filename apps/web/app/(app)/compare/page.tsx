@@ -4,30 +4,13 @@ import { PageHeader } from "@bgc-alpha/ui";
 
 import { CompareConsole } from "@/components/compare-console";
 import { requirePageUser } from "@/lib/auth-session";
+import { compareMetricKeys, compareMetricOptimization } from "@/lib/compare-config";
 import {
   readMilestoneEvaluations,
   readStrategicObjectives,
   strategicObjectiveLabels,
   strategicObjectiveOrder
 } from "@/lib/strategic-objectives";
-
-const metricKeys = [
-  "alpha_issued_total",
-  "alpha_spent_total",
-  "alpha_held_total",
-  "payout_inflow_ratio",
-  "reserve_runway_months",
-  "reward_concentration_top10_pct"
-] as const;
-
-const metricOptimization: Record<string, "lower" | "higher"> = {
-  alpha_issued_total: "higher",
-  alpha_spent_total: "higher",
-  alpha_held_total: "higher",
-  payout_inflow_ratio: "lower",
-  reserve_runway_months: "higher",
-  reward_concentration_top10_pct: "lower"
-};
 
 export default async function ComparePage() {
   await requirePageUser(["compare.read"]);
@@ -84,7 +67,7 @@ export default async function ComparePage() {
   return (
     <>
       <PageHeader
-        step={{ current: 3, total: 3, label: "Side-by-Side Analysis" }}
+        step={{ current: 4, total: 4, label: "Side-by-Side Analysis" }}
         title="Compare Runs"
         description="Select which scenarios to compare across key metrics, goal scores, and milestone checkpoints."
       />
@@ -113,8 +96,8 @@ export default async function ComparePage() {
       {databaseConfigured && runs.length > 0 ? (
         <CompareConsole
           runs={clientRuns}
-          metricKeys={metricKeys}
-          metricOptimization={metricOptimization}
+          metricKeys={compareMetricKeys}
+          metricOptimization={compareMetricOptimization}
           strategicObjectiveOrder={strategicObjectiveOrder}
           strategicObjectiveLabels={strategicObjectiveLabels as Record<string, string>}
           runExtras={runExtras}

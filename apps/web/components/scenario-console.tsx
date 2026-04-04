@@ -11,7 +11,7 @@ import {
 } from "@bgc-alpha/schemas";
 
 import type { AppSessionUser } from "@/lib/auth-session";
-import { getDataSetStatusLabel } from "@/lib/common-language";
+import { getDataSetStatusLabel, getRunReference } from "@/lib/common-language";
 
 /** Locale-proof numeric input — always shows "." as decimal separator */
 function NumericInput({
@@ -100,11 +100,21 @@ type ScenarioRecord = {
   };
   modelVersion: { id: string; versionName: string; status: string; };
   snapshotDefault: { id: string; name: string; validationStatus: string; importedFactCount: number; } | null;
+  latestRun: { id: string; status: string; } | null;
   updatedAt: string;
 };
 
 type BaselineModelRecord = { id: string; versionName: string; status: string; };
 type SnapshotOption = { id: string; name: string; validationStatus: string; importedFactCount: number; };
+type ScenarioFormState = {
+  name: string;
+  templateType: ScenarioRecord["templateType"];
+  description: string;
+  snapshotIdDefault: string;
+  modelVersionId: string;
+  parameters: ScenarioRecord["parameterJson"];
+  milestones: ScenarioMilestoneScheduleItem[];
+};
 
 type ScenarioConsoleProps = {
   scenarios: ScenarioRecord[];
@@ -150,10 +160,75 @@ type RunLaunchResponse = {
   id?: string;
   run?: { id: string; status?: string };
   error?: string;
+  existingRunId?: string;
 };
 
-function getRunLaunchErrorMessage(errorCode: string | undefined, scenarioName: string) {
+type ScenarioConsoleMessage = {
+  text: string;
+  actionHref?: string;
+  actionLabel?: string;
+};
+
+function createDefaultFormState(
+  baselineModels: BaselineModelRecord[]
+): ScenarioFormState {
+  const activeModel = baselineModels.find((item) => item.status === "ACTIVE") ?? baselineModels[0];
+
+  return {
+    name: "",
+    templateType: "Baseline",
+    description: "",
+    snapshotIdDefault: "",
+    modelVersionId: activeModel?.id ?? "",
+    parameters: templateDefaults.Baseline,
+    milestones: [...templateDefaults.Baseline.milestone_schedule]
+  };
+}
+
+function createFormStateFromScenario(scenario: ScenarioRecord): ScenarioFormState {
+  return {
+    name: scenario.name,
+    templateType: scenario.templateType,
+    description: scenario.description ?? "",
+    snapshotIdDefault: scenario.snapshotIdDefault ?? "",
+    modelVersionId: scenario.modelVersionId,
+    parameters: scenario.parameterJson,
+    milestones: [...scenario.parameterJson.milestone_schedule]
+  };
+}
+
+function buildScenarioParameters(formState: ScenarioFormState): ScenarioParameters {
+  return {
+    ...formState.parameters,
+    milestone_schedule: formState.milestones
+  };
+}
+
+function buildScenarioPayload(formState: ScenarioFormState) {
+  return {
+    name: formState.name,
+    templateType: formState.templateType,
+    description: formState.description || null,
+    snapshotIdDefault: formState.snapshotIdDefault || null,
+    modelVersionId: formState.modelVersionId,
+    parameters: buildScenarioParameters(formState)
+  };
+}
+
+function getScenarioPayloadFingerprint(formState: ScenarioFormState) {
+  return JSON.stringify(buildScenarioPayload(formState));
+}
+
+function getRunLaunchErrorMessage(
+  errorCode: string | undefined,
+  scenarioName: string,
+  existingRunId?: string
+) {
   switch (errorCode) {
+    case "duplicate_run":
+      return existingRunId
+        ? `${scenarioName} already has a saved result: ${getRunReference(existingRunId)}.`
+        : `${scenarioName} already has a saved result.`;
     case "snapshot_required":
       return `Attach a data set to ${scenarioName} before running it.`;
     case "snapshot_not_found":
@@ -171,16 +246,21 @@ function getRunLaunchErrorMessage(errorCode: string | undefined, scenarioName: s
   }
 }
 
-function getScenarioRunDisabledReason(
-  scenario: ScenarioRecord,
+function getDraftRunDisabledReason(
+  snapshotIdDefault: string,
+  snapshots: SnapshotOption[],
   canRun: boolean
 ) {
   if (!canRun) return "You do not have permission to run simulations.";
-  if (!scenario.snapshotDefault) return "Attach a default data set before running this scenario.";
-  if (scenario.snapshotDefault.validationStatus !== "APPROVED") {
+  if (!snapshotIdDefault) return "Attach a default data set before running this scenario.";
+
+  const snapshot = snapshots.find((item) => item.id === snapshotIdDefault);
+
+  if (!snapshot) return "The selected data set no longer exists.";
+  if (snapshot.validationStatus !== "APPROVED") {
     return "Approve the default data set before running this scenario.";
   }
-  if (scenario.snapshotDefault.importedFactCount === 0) {
+  if (snapshot.importedFactCount === 0) {
     return "Import rows into the default data set before running this scenario.";
   }
   return null;
@@ -189,25 +269,17 @@ function getScenarioRunDisabledReason(
 export function ScenarioConsole({ scenarios, snapshots, baselineModels, user }: ScenarioConsoleProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<ScenarioConsoleMessage | null>(null);
   const [editingScenarioId, setEditingScenarioId] = useState<string | null>(null);
+  const [savedScenarioFingerprint, setSavedScenarioFingerprint] = useState<string | null>(null);
+  const [runReadyScenarioId, setRunReadyScenarioId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [openSections, setOpenSections] = useState<Set<string>>(new Set(["conversion"]));
-  const [formState, setFormState] = useState(() => {
-    const activeModel = baselineModels.find((item) => item.status === "ACTIVE") ?? baselineModels[0];
-    return {
-      name: "",
-      templateType: "Baseline" as ScenarioRecord["templateType"],
-      description: "",
-      snapshotIdDefault: "",
-      modelVersionId: activeModel?.id ?? "",
-      parameters: templateDefaults.Baseline,
-      milestones: [...templateDefaults.Baseline.milestone_schedule]
-    };
-  });
+  const [formState, setFormState] = useState<ScenarioFormState>(() => createDefaultFormState(baselineModels));
 
   const canWrite = user.capabilities.includes("scenarios.write");
   const canRun = user.capabilities.includes("runs.write");
+  const canReadRuns = user.capabilities.includes("runs.read");
 
   function toggleSection(key: string) {
     setOpenSections(prev => {
@@ -218,32 +290,125 @@ export function ScenarioConsole({ scenarios, snapshots, baselineModels, user }: 
   }
 
   function resetForm() {
-    const activeModel = baselineModels.find((i) => i.status === "ACTIVE") ?? baselineModels[0];
     setEditingScenarioId(null);
+    setSavedScenarioFingerprint(null);
+    setRunReadyScenarioId(null);
     setShowForm(false);
-    setFormState({ name: "", templateType: "Baseline", description: "", snapshotIdDefault: "", modelVersionId: activeModel?.id ?? "", parameters: templateDefaults.Baseline, milestones: [...templateDefaults.Baseline.milestone_schedule] });
+    setFormState(createDefaultFormState(baselineModels));
   }
 
   function startEdit(scenario: ScenarioRecord) {
+    const nextFormState = createFormStateFromScenario(scenario);
+
+    setMessage(null);
     setEditingScenarioId(scenario.id);
+    setSavedScenarioFingerprint(getScenarioPayloadFingerprint(nextFormState));
+    setRunReadyScenarioId(null);
     setShowForm(true);
-    setFormState({
-      name: scenario.name,
-      templateType: scenario.templateType,
-      description: scenario.description ?? "",
-      snapshotIdDefault: scenario.snapshotIdDefault ?? "",
-      modelVersionId: scenario.modelVersionId,
-      parameters: scenario.parameterJson,
-      milestones: [...scenario.parameterJson.milestone_schedule]
-    });
+    setFormState(nextFormState);
   }
 
+  async function launchScenarioRun(
+    scenarioId: string,
+    scenarioName: string,
+    snapshotId?: string
+  ) {
+    setMessage(null);
+
+    const response = await fetch(`/api/scenarios/${scenarioId}/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        snapshotId: snapshotId || undefined
+      })
+    });
+    const payload = (await response.json().catch(() => null)) as RunLaunchResponse | null;
+
+    if (!response.ok) {
+      if (payload?.error === "duplicate_run" && payload.existingRunId) {
+        setMessage({
+          text: getRunLaunchErrorMessage(
+            payload.error,
+            scenarioName,
+            payload.existingRunId
+          ),
+          actionHref: `/runs/${payload.existingRunId}`,
+          actionLabel: "Open Existing Result"
+        });
+        return;
+      }
+
+      setMessage({
+        text: getRunLaunchErrorMessage(payload?.error, scenarioName)
+      });
+      return;
+    }
+
+    const runId = payload?.id ?? payload?.run?.id;
+
+    if (!runId) {
+      setMessage({
+        text: `Run queued for ${scenarioName}, but the run id was missing from the response.`
+      });
+      router.refresh();
+      return;
+    }
+
+    setMessage({
+      text:
+        payload?.run?.status === "COMPLETED"
+          ? `Run completed for ${scenarioName}.`
+          : `Run queued for ${scenarioName}.`
+    });
+    router.push(`/runs/${runId}`);
+  }
+
+  const currentPayloadFingerprint = getScenarioPayloadFingerprint(formState);
+  const hasScenarioChanges = editingScenarioId
+    ? currentPayloadFingerprint !== savedScenarioFingerprint
+    : false;
+  const editRunDisabledReason = editingScenarioId
+    ? getDraftRunDisabledReason(formState.snapshotIdDefault, snapshots, canRun)
+    : null;
+  const showRunAfterUpdateButton =
+    Boolean(editingScenarioId) &&
+    runReadyScenarioId === editingScenarioId &&
+    !hasScenarioChanges;
   const p = formState.parameters;
 
   return (
-    <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem", alignItems: "start" }}>
-      {/* Left: Form */}
-      <div>
+    <section style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      {message ? (
+        <div
+          className="card"
+          style={{
+            alignItems: "center",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "0.75rem",
+            justifyContent: "space-between",
+            padding: "0.9rem 1rem"
+          }}
+        >
+          <p className="muted" style={{ fontSize: "0.82rem", margin: 0 }}>
+            {message.text}
+          </p>
+          {message.actionHref ? (
+            <button
+              className="ghost-button"
+              onClick={() => router.push(message.actionHref!)}
+              style={{ fontSize: "0.74rem", padding: "0.3rem 0.6rem" }}
+              type="button"
+            >
+              {message.actionLabel ?? "Open"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem", alignItems: "start" }}>
+        {/* Left: Form */}
+        <div>
         {/* Create / Toggle Button */}
         {!showForm ? (
           <button
@@ -296,23 +461,42 @@ export function ScenarioConsole({ scenarios, snapshots, baselineModels, user }: 
                 event.preventDefault();
                 setMessage(null);
                 startTransition(async () => {
-                  const milestoneSchedule = formState.milestones;
                   const endpoint = editingScenarioId ? `/api/scenarios/${editingScenarioId}` : "/api/scenarios";
                   const method = editingScenarioId ? "PATCH" : "POST";
+                  const payload = buildScenarioPayload(formState);
+
+                  if (editingScenarioId && !hasScenarioChanges) {
+                    setRunReadyScenarioId(null);
+                    setMessage({
+                      text: "No scenario changes to update."
+                    });
+                    return;
+                  }
+
                   const response = await fetch(endpoint, {
                     method,
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      name: formState.name,
-                      templateType: formState.templateType,
-                      description: formState.description || null,
-                      snapshotIdDefault: formState.snapshotIdDefault || null,
-                      modelVersionId: formState.modelVersionId,
-                      parameters: { ...formState.parameters, milestone_schedule: milestoneSchedule } satisfies ScenarioParameters
-                    })
+                    body: JSON.stringify(payload)
                   });
-                  if (!response.ok) { setMessage("Save failed. Check inputs."); return; }
-                  setMessage(editingScenarioId ? "Scenario updated." : "Scenario created.");
+                  if (!response.ok) {
+                    setRunReadyScenarioId(null);
+                    setMessage({ text: "Save failed. Check inputs." });
+                    return;
+                  }
+
+                  if (editingScenarioId) {
+                    setSavedScenarioFingerprint(currentPayloadFingerprint);
+                    setRunReadyScenarioId(editingScenarioId);
+                    setMessage({
+                      text: "Scenario updated. You can run it now."
+                    });
+                    router.refresh();
+                    return;
+                  }
+
+                  setMessage({
+                    text: "Scenario created."
+                  });
                   resetForm();
                   router.refresh();
                 });
@@ -552,21 +736,43 @@ export function ScenarioConsole({ scenarios, snapshots, baselineModels, user }: 
                 ) : null}
               </div>
 
-              {message ? <p className="muted" style={{ fontSize: "0.82rem" }}>{message}</p> : null}
-
               <div className="action-row">
-                <button className="primary-button" disabled={!canWrite || isPending} type="submit">
+                <button
+                  className="primary-button"
+                  disabled={!canWrite || isPending || Boolean(editingScenarioId && !hasScenarioChanges)}
+                  type="submit"
+                >
                   {isPending ? "Saving..." : editingScenarioId ? "Update Scenario" : "Create Scenario"}
                 </button>
+                {showRunAfterUpdateButton && editingScenarioId ? (
+                  <button
+                    className="primary-button"
+                    disabled={Boolean(editRunDisabledReason) || isPending}
+                    onClick={() => {
+                      startTransition(async () => {
+                        await launchScenarioRun(
+                          editingScenarioId,
+                          formState.name,
+                          formState.snapshotIdDefault
+                        );
+                      });
+                    }}
+                    style={{ fontSize: "0.78rem", padding: "0.35rem 0.65rem" }}
+                    title={editRunDisabledReason ?? undefined}
+                    type="button"
+                  >
+                    Run ▶
+                  </button>
+                ) : null}
                 {editingScenarioId ? <button className="ghost-button" onClick={resetForm} type="button">Cancel</button> : null}
               </div>
             </form>
           </div>
         ) : null}
-      </div>
+        </div>
 
-      {/* Right: Saved Scenarios */}
-      <div>
+        {/* Right: Saved Scenarios */}
+        <div>
         <h3 style={{ fontSize: "0.95rem", marginBottom: "0.75rem", color: "var(--text-secondary)" }}>Saved Scenarios</h3>
         {scenarios.length === 0 ? (
           <div className="empty-state">
@@ -577,7 +783,11 @@ export function ScenarioConsole({ scenarios, snapshots, baselineModels, user }: 
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
             {scenarios.map((scenario) => {
-              const runDisabledReason = getScenarioRunDisabledReason(scenario, canRun);
+              const seeResultDisabledReason = !canReadRuns
+                ? "You do not have permission to view simulation results."
+                : !scenario.latestRun
+                  ? "No saved result yet."
+                  : null;
 
               return (
                 <div className="card" key={scenario.id}>
@@ -600,41 +810,17 @@ export function ScenarioConsole({ scenarios, snapshots, baselineModels, user }: 
                   <button className="ghost-button" disabled={!canWrite} onClick={() => startEdit(scenario)} type="button" style={{ fontSize: "0.78rem", padding: "0.35rem 0.65rem" }}>Edit</button>
                   <button
                     className="primary-button"
-                    disabled={Boolean(runDisabledReason) || isPending}
+                    disabled={Boolean(seeResultDisabledReason) || isPending}
                     onClick={() => {
-                      startTransition(async () => {
-                        setMessage(null);
-                        const response = await fetch(`/api/scenarios/${scenario.id}/run`, {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            snapshotId: scenario.snapshotIdDefault || undefined
-                          })
-                        });
-                        const payload = (await response.json().catch(() => null)) as RunLaunchResponse | null;
-                        if (!response.ok) {
-                          setMessage(getRunLaunchErrorMessage(payload?.error, scenario.name));
-                          return;
-                        }
-                        const runId = payload?.id ?? payload?.run?.id;
-                        if (!runId) {
-                          setMessage(`Run queued for ${scenario.name}, but the run id was missing from the response.`);
-                          router.refresh();
-                          return;
-                        }
-                        setMessage(
-                          payload?.run?.status === "COMPLETED"
-                            ? `Run completed for ${scenario.name}.`
-                            : `Run queued for ${scenario.name}.`
-                        );
-                        router.push(`/runs/${runId}`);
-                      });
+                      if (scenario.latestRun) {
+                        router.push(`/runs/${scenario.latestRun.id}`);
+                      }
                     }}
                     type="button"
-                    title={runDisabledReason ?? undefined}
+                    title={seeResultDisabledReason ?? undefined}
                     style={{ fontSize: "0.78rem", padding: "0.35rem 0.65rem" }}
                   >
-                    Run ▶
+                    See Result
                   </button>
                 </div>
                 </div>
@@ -642,6 +828,7 @@ export function ScenarioConsole({ scenarios, snapshots, baselineModels, user }: 
             })}
           </div>
         )}
+        </div>
       </div>
     </section>
   );
