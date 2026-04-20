@@ -1,4 +1,4 @@
-import { listSnapshots } from "@bgc-alpha/db";
+import { getSnapshotStorageCleanupReport, listSnapshots } from "@bgc-alpha/db";
 import { hasDatabaseUrl } from "@bgc-alpha/db/database-url";
 import { hasBlobReadWriteToken } from "@bgc-alpha/db/snapshot-storage";
 import { PageHeader } from "@bgc-alpha/ui";
@@ -11,7 +11,12 @@ export const dynamic = "force-dynamic";
 export default async function SnapshotsPage() {
   const databaseConfigured = hasDatabaseUrl();
   const user = await requirePageUser(["snapshots.read"]);
-  const snapshots = databaseConfigured ? await listSnapshots() : [];
+  const [snapshots, cleanupReport] = databaseConfigured
+    ? await Promise.all([
+        listSnapshots({ includeArchived: true }),
+        getSnapshotStorageCleanupReport()
+      ])
+    : [[], null];
 
   return (
     <>
@@ -44,11 +49,15 @@ export default async function SnapshotsPage() {
               }
             : null,
           importedFactCount: snapshot._count.memberMonthFacts,
+          scenarioRefCount: snapshot._count.scenarios,
+          runRefCount: snapshot._count.runs,
           dateFrom: snapshot.dateFrom.toISOString(),
           dateTo: snapshot.dateTo.toISOString(),
-          approvedAt: snapshot.approvedAt?.toISOString() ?? null
+          approvedAt: snapshot.approvedAt?.toISOString() ?? null,
+          archivedAt: snapshot.archivedAt?.toISOString() ?? null
         }))}
         blobUploadsEnabled={hasBlobReadWriteToken()}
+        cleanupReport={cleanupReport}
         user={user}
       />
     </>

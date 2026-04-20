@@ -20,6 +20,7 @@ type SnapshotRecord = {
   id: string;
   name: string;
   sourceSystems: string[];
+  canonicalSourceSnapshotKey?: string | null;
   dateFrom: string;
   dateTo: string;
   fileUri: string;
@@ -29,6 +30,9 @@ type SnapshotRecord = {
   approvedAt: string | null;
   notes: string | null;
   importedFactCount: number;
+  scenarioRefCount: number;
+  runRefCount: number;
+  archivedAt: string | null;
   latestImportRun: {
     id: string;
     status: string;
@@ -53,11 +57,50 @@ type SnapshotRecord = {
   }>;
 };
 
+type SnapshotCleanupReport = {
+  totals: {
+    archivedSnapshots: number;
+    lockedSnapshots: number;
+    unreferencedArchivedSnapshots: number;
+    rawFileCleanupCandidates: number;
+    failedImportCandidates: number;
+    supersedeCandidates: number;
+  };
+  rawFileCleanupCandidates: Array<{
+    id: string;
+    name: string;
+    archivedAt: string | null;
+    scenarioRefs: number;
+    runRefs: number;
+  }>;
+  failedImportCandidates: Array<{
+    id: string;
+    snapshotId: string;
+    snapshotName: string;
+    completedAt: string | null;
+  }>;
+  supersedeCandidates: Array<{
+    id: string;
+    name: string;
+    canonicalSourceSnapshotKey: string | null;
+    createdAt: string;
+    scenarioRefs: number;
+    runRefs: number;
+  }>;
+};
+
 type SnapshotConsoleProps = {
   snapshots: SnapshotRecord[];
   blobUploadsEnabled: boolean;
+  cleanupReport: SnapshotCleanupReport | null;
   user: AppSessionUser;
 };
+
+type SnapshotArchiveResponse = {
+  error?: string;
+};
+
+type SnapshotScope = "active" | "archived" | "all";
 
 type ImportResponse = {
   error?: string;
@@ -112,6 +155,8 @@ function getSnapshotValidationErrorMessage(errorCode: string | undefined, snapsh
   switch (errorCode) {
     case "snapshot_import_in_progress":
       return `${snapshotName} is still importing. Wait for the import to finish first.`;
+    case "snapshot_archived":
+      return `${snapshotName} is archived. Unarchive it before validating.`;
     case "snapshot_has_no_imported_rows":
       return `Import rows into ${snapshotName} before validating it.`;
     default:
@@ -123,6 +168,8 @@ function getSnapshotApprovalErrorMessage(errorCode: string | undefined, snapshot
   switch (errorCode) {
     case "snapshot_import_in_progress":
       return `${snapshotName} is still importing. Wait for the import to finish first.`;
+    case "snapshot_archived":
+      return `${snapshotName} is archived. Unarchive it before approving.`;
     case "snapshot_has_no_imported_rows":
       return `Import rows into ${snapshotName} before approving it.`;
     case "snapshot_not_approvable":
@@ -136,18 +183,21 @@ function getSnapshotImportErrorMessage(errorCode: string | undefined, snapshotNa
   switch (errorCode) {
     case "snapshot_import_already_running":
       return `${snapshotName} is already importing.`;
+    case "snapshot_archived":
+      return `${snapshotName} is archived. Unarchive it before importing.`;
     default:
       return `Import failed for ${snapshotName}.`;
   }
 }
 
-export function SnapshotConsole({ snapshots, blobUploadsEnabled, user }: SnapshotConsoleProps) {
+export function SnapshotConsole({ snapshots, blobUploadsEnabled, cleanupReport, user }: SnapshotConsoleProps) {
   const router = useRouter();
   const [formState, setFormState] = useState(defaultFormState);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [showForm, setShowForm] = useState(false);
+  const [snapshotScope, setSnapshotScope] = useState<SnapshotScope>("active");
   const [expandedIssues, setExpandedIssues] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -157,6 +207,18 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, user }: Snapsho
   const hasActiveImport = snapshots.some((snapshot) =>
     isActiveImportStatus(snapshot.latestImportRun?.status)
   );
+  const activeSnapshotCount = snapshots.filter((snapshot) => !snapshot.archivedAt).length;
+  const archivedSnapshotCount = snapshots.filter((snapshot) => Boolean(snapshot.archivedAt)).length;
+  const visibleSnapshots = snapshots.filter((snapshot) => {
+    switch (snapshotScope) {
+      case "archived":
+        return Boolean(snapshot.archivedAt);
+      case "all":
+        return true;
+      default:
+        return !snapshot.archivedAt;
+    }
+  });
 
   useEffect(() => {
     if (!hasActiveImport) {
@@ -179,6 +241,39 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, user }: Snapsho
       else next.add(id);
       return next;
     });
+  }
+
+  async function toggleSnapshotArchive(snapshot: SnapshotRecord) {
+    setMessage(null);
+
+    const response = await fetch(`/api/snapshots/${snapshot.id}/archive`, {
+      method: snapshot.archivedAt ? "DELETE" : "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        reason: snapshot.archivedAt ? null : "Archived from snapshot registry"
+      })
+    });
+    const payload = (await response.json().catch(() => null)) as SnapshotArchiveResponse | null;
+
+    if (!response.ok) {
+      setMessage(
+        payload?.error === "snapshot_import_in_progress"
+          ? `${snapshot.name} is still importing. Wait for import completion before archiving.`
+          : payload?.error === "snapshot_not_found"
+            ? `${snapshot.name} no longer exists.`
+            : "Snapshot update failed."
+      );
+      return;
+    }
+
+    setMessage(
+      snapshot.archivedAt
+        ? `${snapshot.name} returned to the active snapshot registry.`
+        : `${snapshot.name} archived from the default snapshot registry view.`
+    );
+    router.refresh();
   }
 
   return (
@@ -350,15 +445,78 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, user }: Snapsho
       {message && !showForm ? <p className="muted" style={{ fontSize: "0.82rem", marginBottom: "0.75rem" }}>{message}</p> : null}
 
       {/* Snapshot Cards */}
-      {snapshots.length === 0 ? (
+      {cleanupReport ? (
+        <div className="card" style={{ marginBottom: "1rem" }}>
+          <div style={{ display: "grid", gap: "0.4rem" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", justifyContent: "space-between" }}>
+              <div>
+                <h3 style={{ marginBottom: "0.2rem" }}>Storage Cleanup Policy</h3>
+                <p className="muted" style={{ fontSize: "0.8rem", margin: 0 }}>
+                  Archive keeps the registry clean. Cleanup candidates below show where storage reduction can happen later without deleting active business truth.
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "flex-start" }}>
+                <span className="badge badge--neutral">{cleanupReport.totals.archivedSnapshots} archived</span>
+                <span className="badge badge--neutral">{cleanupReport.totals.lockedSnapshots} locked</span>
+              </div>
+            </div>
+            <div style={{ display: "grid", gap: "0.65rem", gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
+              <div className="card" style={{ background: "var(--surface-subtle)", padding: "0.85rem" }}>
+                <p className="metric" style={{ fontSize: "1.4rem" }}>{cleanupReport.totals.rawFileCleanupCandidates}</p>
+                <p className="metric-sub">raw file cleanup candidates</p>
+              </div>
+              <div className="card" style={{ background: "var(--surface-subtle)", padding: "0.85rem" }}>
+                <p className="metric" style={{ fontSize: "1.4rem" }}>{cleanupReport.totals.failedImportCandidates}</p>
+                <p className="metric-sub">failed import logs older than 30 days</p>
+              </div>
+              <div className="card" style={{ background: "var(--surface-subtle)", padding: "0.85rem" }}>
+                <p className="metric" style={{ fontSize: "1.4rem" }}>{cleanupReport.totals.supersedeCandidates}</p>
+                <p className="metric-sub">duplicate source snapshot candidates</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.75rem" }}>
+        <button
+          className="ghost-button"
+          data-active={snapshotScope === "active"}
+          onClick={() => setSnapshotScope("active")}
+          style={{ fontSize: "0.74rem", padding: "0.3rem 0.65rem" }}
+          type="button"
+        >
+          Active ({activeSnapshotCount})
+        </button>
+        <button
+          className="ghost-button"
+          data-active={snapshotScope === "archived"}
+          onClick={() => setSnapshotScope("archived")}
+          style={{ fontSize: "0.74rem", padding: "0.3rem 0.65rem" }}
+          type="button"
+        >
+          Archived ({archivedSnapshotCount})
+        </button>
+        <button
+          className="ghost-button"
+          data-active={snapshotScope === "all"}
+          onClick={() => setSnapshotScope("all")}
+          style={{ fontSize: "0.74rem", padding: "0.3rem 0.65rem" }}
+          type="button"
+        >
+          All ({snapshots.length})
+        </button>
+      </div>
+
+      {visibleSnapshots.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">📁</div>
-          <h3>No snapshots yet</h3>
-          <p>Click &quot;Add Snapshot&quot; to upload your first historical dataset.</p>
+          <h3>No snapshots in this view</h3>
+          <p>Add a snapshot or switch the registry filter.</p>
         </div>
       ) : (
         <div className="snapshot-card-list">
-          {snapshots.map((snapshot) => {
+          {visibleSnapshots.map((snapshot) => {
             const steps = getProgressSteps(snapshot);
             const hasIssues = (snapshot.latestImportRun?.issues.length ?? 0) > 0 || snapshot.validationIssues.length > 0;
             const issuesExpanded = expandedIssues.has(snapshot.id);
@@ -367,9 +525,12 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, user }: Snapsho
               <div className="snapshot-card" key={snapshot.id}>
                 <div className="snapshot-card-header">
                   <h4 className="snapshot-card-title">{snapshot.name}</h4>
-                  <span className={`badge ${getStatusBadgeClass(snapshot.validationStatus)}`}>
-                    {getDataSetStatusLabel(snapshot.validationStatus)}
-                  </span>
+                  <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    <span className={`badge ${getStatusBadgeClass(snapshot.validationStatus)}`}>
+                      {getDataSetStatusLabel(snapshot.validationStatus)}
+                    </span>
+                    {snapshot.archivedAt ? <span className="badge badge--neutral">Archived</span> : null}
+                  </div>
                 </div>
 
                 <div className="snapshot-card-meta">
@@ -379,6 +540,7 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, user }: Snapsho
                   </span>
                   <span>{snapshot.sourceSystems.join(", ")}</span>
                   <span>{snapshot.importedFactCount.toLocaleString()} rows imported</span>
+                  <span>{snapshot.scenarioRefCount} scenario refs · {snapshot.runRefCount} run refs</span>
                 </div>
 
                 {/* Progress Stepper */}
@@ -443,7 +605,7 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, user }: Snapsho
                 <div className="snapshot-card-actions">
                   <button
                     className="ghost-button"
-                    disabled={!canWrite || isPending || isActiveImportStatus(snapshot.latestImportRun?.status)}
+                    disabled={!canWrite || isPending || isActiveImportStatus(snapshot.latestImportRun?.status) || Boolean(snapshot.archivedAt)}
                     onClick={() => {
                       startTransition(async () => {
                         const response = await fetch(`/api/snapshots/${snapshot.id}/import`, { method: "POST" });
@@ -471,6 +633,7 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, user }: Snapsho
                     disabled={
                       !canValidate ||
                       isPending ||
+                      Boolean(snapshot.archivedAt) ||
                       snapshot.importedFactCount === 0 ||
                       isActiveImportStatus(snapshot.latestImportRun?.status)
                     }
@@ -495,6 +658,7 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, user }: Snapsho
                     disabled={
                       !canApprove ||
                       isPending ||
+                      Boolean(snapshot.archivedAt) ||
                       snapshot.importedFactCount === 0 ||
                       isActiveImportStatus(snapshot.latestImportRun?.status) ||
                       !["VALID", "APPROVED"].includes(snapshot.validationStatus)
@@ -514,6 +678,18 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, user }: Snapsho
                     type="button"
                   >
                     Approve
+                  </button>
+                  <button
+                    className="ghost-button"
+                    disabled={!canWrite || isPending || isActiveImportStatus(snapshot.latestImportRun?.status)}
+                    onClick={() => {
+                      startTransition(async () => {
+                        await toggleSnapshotArchive(snapshot);
+                      });
+                    }}
+                    type="button"
+                  >
+                    {snapshot.archivedAt ? "Unarchive" : "Archive"}
                   </button>
                 </div>
 

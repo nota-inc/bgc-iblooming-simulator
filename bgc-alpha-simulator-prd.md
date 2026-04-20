@@ -252,6 +252,7 @@ The MVP must support:
 2. System validates coverage, schema, and date range.
 3. System shows data quality summary and snapshot version.
 4. User confirms snapshot for scenario work.
+5. Older snapshots can be archived from the active registry without deleting historical truth.
 
 ### Flow 2: Create a Scenario
 
@@ -266,6 +267,7 @@ The MVP must support:
 2. Engine processes the scenario.
 3. System generates outputs for treasury, fairness, distribution, user experience, and operational load.
 4. Run is stored with reproducible metadata.
+5. Saved run refs can later be pinned or archived in the Result Ref registry.
 
 ### Flow 4: Compare Runs
 
@@ -290,7 +292,9 @@ Requirements:
 - show snapshot date range,
 - show record counts and validation summary,
 - preserve immutable snapshot versions for reproducibility,
-- prevent a run from proceeding against an invalid snapshot.
+- prevent a run from proceeding against an invalid snapshot,
+- support reversible archive state for registry cleanup,
+- surface a storage-cleanup report without deleting active truth.
 
 ### FR-02 Baseline Model Library
 
@@ -363,7 +367,9 @@ Requirements:
 - snapshot used,
 - parameter set,
 - status,
-- output summary.
+- output summary,
+- archive state,
+- pin state for retained refs.
 
 ### FR-07 Comparison View
 

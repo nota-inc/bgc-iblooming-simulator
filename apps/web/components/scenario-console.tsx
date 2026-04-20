@@ -104,8 +104,16 @@ type ScenarioRecord = {
     milestone_schedule: ScenarioMilestoneScheduleItem[];
   };
   modelVersion: { id: string; versionName: string; status: string; };
-  snapshotDefault: { id: string; name: string; validationStatus: string; importedFactCount: number; } | null;
+  snapshotDefault: {
+    id: string;
+    name: string;
+    validationStatus: string;
+    importedFactCount: number;
+    archivedAt: string | null;
+  } | null;
   latestRun: { id: string; status: string; } | null;
+  runCount: number;
+  archivedAt: string | null;
   updatedAt: string;
 };
 
@@ -118,7 +126,13 @@ type BaselineModelRecord = {
     reward_pool_factor: number;
   };
 };
-type SnapshotOption = { id: string; name: string; validationStatus: string; importedFactCount: number; };
+type SnapshotOption = {
+  id: string;
+  name: string;
+  validationStatus: string;
+  importedFactCount: number;
+  archivedAt: string | null;
+};
 type ScenarioFormState = {
   name: string;
   templateType: ScenarioRecord["templateType"];
@@ -228,6 +242,12 @@ type ScenarioMutationResponse = {
   guardrailIssues?: ScenarioGuardrailIssue[];
 };
 
+type ScenarioArchiveResponse = {
+  error?: string;
+};
+
+type ScenarioScope = "active" | "archived" | "all";
+
 type ScenarioConsoleMessage = {
   text: string;
   actionHref?: string;
@@ -323,12 +343,16 @@ function getRunLaunchErrorMessage(
       return `Attach a data set to ${scenarioName} before running it.`;
     case "snapshot_not_found":
       return `The selected data set for ${scenarioName} no longer exists.`;
+    case "snapshot_archived":
+      return `The selected data set for ${scenarioName} is archived. Unarchive it or attach a new one before running.`;
     case "snapshot_must_be_approved":
       return `Approve the selected data set before running ${scenarioName}.`;
     case "snapshot_has_no_facts":
       return `Import rows into the selected data set before running ${scenarioName}.`;
     case "scenario_not_found":
       return `${scenarioName} could not be found. Refresh and try again.`;
+    case "scenario_archived":
+      return `${scenarioName} is archived. Unarchive it before running a new simulation.`;
     case "validation_failed":
       return `Run launch failed validation for ${scenarioName}. Check the scenario inputs and try again.`;
     case "scenario_guardrail_failed":
@@ -362,6 +386,9 @@ function getDraftRunDisabledReason(
   const snapshot = snapshots.find((item) => item.id === snapshotIdDefault);
 
   if (!snapshot) return "The selected data set no longer exists.";
+  if (snapshot.archivedAt) {
+    return "The selected data set is archived. Unarchive it before running this scenario.";
+  }
   if (snapshot.validationStatus !== "APPROVED") {
     return "Approve the default data set before running this scenario.";
   }
@@ -385,9 +412,15 @@ function getSavedScenarioRunDisabledReason(
   );
   const blockingIssue = guardrailIssues.find((issue) => issue.severity === "ERROR");
   if (blockingIssue) return blockingIssue.message;
+  if (scenario.archivedAt) {
+    return "This scenario is archived. Unarchive it before running.";
+  }
 
   if (!scenario.snapshotDefault) {
     return "Attach a default data set before running this scenario.";
+  }
+  if (scenario.snapshotDefault.archivedAt) {
+    return "The default data set is archived. Unarchive it before running this scenario.";
   }
   if (scenario.snapshotDefault.validationStatus !== "APPROVED") {
     return "Approve the default data set before running this scenario.";
@@ -407,12 +440,26 @@ export function ScenarioConsole({ scenarios, snapshots, baselineModels, user }: 
   const [savedScenarioFingerprint, setSavedScenarioFingerprint] = useState<string | null>(null);
   const [runReadyScenarioId, setRunReadyScenarioId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [scenarioScope, setScenarioScope] = useState<ScenarioScope>("active");
   const [openSections, setOpenSections] = useState<Set<string>>(new Set(["conversion"]));
   const [formState, setFormState] = useState<ScenarioFormState>(() => createDefaultFormState(baselineModels));
 
   const canWrite = user.capabilities.includes("scenarios.write");
   const canRun = user.capabilities.includes("runs.write");
   const canReadRuns = user.capabilities.includes("runs.read");
+  const activeSnapshots = snapshots.filter((snapshot) => !snapshot.archivedAt);
+  const activeScenarioCount = scenarios.filter((scenario) => !scenario.archivedAt).length;
+  const archivedScenarioCount = scenarios.filter((scenario) => Boolean(scenario.archivedAt)).length;
+  const visibleScenarios = scenarios.filter((scenario) => {
+    switch (scenarioScope) {
+      case "archived":
+        return Boolean(scenario.archivedAt);
+      case "all":
+        return true;
+      default:
+        return !scenario.archivedAt;
+    }
+  });
 
   function toggleSection(key: string) {
     setOpenSections(prev => {
@@ -500,6 +547,35 @@ export function ScenarioConsole({ scenarios, snapshots, baselineModels, user }: 
           : `Run queued for ${scenarioName}.`
     });
     router.push(`/runs/${runId}`);
+  }
+
+  async function toggleScenarioArchive(scenario: ScenarioRecord) {
+    setMessage(null);
+
+    const response = await fetch(`/api/scenarios/${scenario.id}/archive`, {
+      method: scenario.archivedAt ? "DELETE" : "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        reason: scenario.archivedAt ? null : "Archived from scenario registry"
+      })
+    });
+    const payload = (await response.json().catch(() => null)) as ScenarioArchiveResponse | null;
+
+    if (!response.ok) {
+      setMessage({
+        text: payload?.error === "scenario_not_found" ? "Scenario no longer exists." : "Scenario update failed."
+      });
+      return;
+    }
+
+    setMessage({
+      text: scenario.archivedAt
+        ? `${scenario.name} returned to the active scenario registry.`
+        : `${scenario.name} archived from the default scenario registry view.`
+    });
+    router.refresh();
   }
 
   const currentPayloadFingerprint = getScenarioPayloadFingerprint(formState, baselineModels);
@@ -720,7 +796,7 @@ export function ScenarioConsole({ scenarios, snapshots, baselineModels, user }: 
                 <span>Default snapshot</span>
                 <select disabled={!canWrite || isPending} onChange={(e) => setFormState(c => ({ ...c, snapshotIdDefault: e.target.value }))} value={formState.snapshotIdDefault}>
                   <option value="">None</option>
-                  {snapshots.map((s) => <option key={s.id} value={s.id}>{s.name} ({getDataSetStatusLabel(s.validationStatus)}, {s.importedFactCount.toLocaleString()} rows)</option>)}
+                  {activeSnapshots.map((s) => <option key={s.id} value={s.id}>{s.name} ({getDataSetStatusLabel(s.validationStatus)}, {s.importedFactCount.toLocaleString()} rows)</option>)}
                 </select>
               </label>
 
@@ -1035,15 +1111,44 @@ export function ScenarioConsole({ scenarios, snapshots, baselineModels, user }: 
         {/* Right: Saved Scenarios */}
         <div>
         <h3 style={{ fontSize: "0.95rem", marginBottom: "0.75rem", color: "var(--text-secondary)" }}>Saved Scenarios</h3>
-        {scenarios.length === 0 ? (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.75rem" }}>
+          <button
+            className="ghost-button"
+            data-active={scenarioScope === "active"}
+            onClick={() => setScenarioScope("active")}
+            style={{ fontSize: "0.74rem", padding: "0.3rem 0.65rem" }}
+            type="button"
+          >
+            Active ({activeScenarioCount})
+          </button>
+          <button
+            className="ghost-button"
+            data-active={scenarioScope === "archived"}
+            onClick={() => setScenarioScope("archived")}
+            style={{ fontSize: "0.74rem", padding: "0.3rem 0.65rem" }}
+            type="button"
+          >
+            Archived ({archivedScenarioCount})
+          </button>
+          <button
+            className="ghost-button"
+            data-active={scenarioScope === "all"}
+            onClick={() => setScenarioScope("all")}
+            style={{ fontSize: "0.74rem", padding: "0.3rem 0.65rem" }}
+            type="button"
+          >
+            All ({scenarios.length})
+          </button>
+        </div>
+        {visibleScenarios.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">📋</div>
-            <h3>No scenarios yet</h3>
-            <p>Create your first scenario to start running simulations.</p>
+            <h3>No scenarios in this view</h3>
+            <p>Create a scenario or switch the registry filter.</p>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
-            {scenarios.map((scenario) => {
+            {visibleScenarios.map((scenario) => {
               const runDisabledReason = scenario.latestRun
                 ? null
                 : getSavedScenarioRunDisabledReason(
@@ -1059,14 +1164,21 @@ export function ScenarioConsole({ scenarios, snapshots, baselineModels, user }: 
                 <div className="card" key={scenario.id}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.35rem" }}>
                   <h4 style={{ margin: 0, fontSize: "0.95rem" }}>{scenario.name}</h4>
-                  <span className={`badge ${getTemplateBadgeClass(scenario.templateType)}`}>{scenario.templateType}</span>
+                  <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    <span className={`badge ${getTemplateBadgeClass(scenario.templateType)}`}>{scenario.templateType}</span>
+                    {scenario.archivedAt ? <span className="badge badge--neutral">Archived</span> : null}
+                  </div>
                 </div>
                 <p className="muted" style={{ fontSize: "0.78rem", margin: "0 0 0.35rem" }}>
                   {scenario.modelVersion.versionName} · k_pc: {scenario.parameterJson.k_pc} · k_sp: {scenario.parameterJson.k_sp} · Cap: ${scenario.parameterJson.cap_user_monthly}
                 </p>
+                <p className="muted" style={{ fontSize: "0.74rem", margin: "0 0 0.45rem" }}>
+                  {scenario.runCount} saved run{scenario.runCount === 1 ? "" : "s"}
+                </p>
                 {scenario.snapshotDefault ? (
                   <p className="muted" style={{ fontSize: "0.75rem", margin: "0 0 0.5rem" }}>
                     <span className={`badge ${scenario.snapshotDefault.validationStatus === "APPROVED" ? "badge--candidate" : "badge--neutral"}`} style={{ fontSize: "0.6rem", marginRight: "0.3rem" }}>{getDataSetStatusLabel(scenario.snapshotDefault.validationStatus)}</span>
+                    {scenario.snapshotDefault.archivedAt ? <span className="badge badge--neutral" style={{ fontSize: "0.6rem", marginRight: "0.3rem" }}>Archived Snapshot</span> : null}
                     {scenario.snapshotDefault.name} ({scenario.snapshotDefault.importedFactCount.toLocaleString()} rows)
                   </p>
                 ) : (
@@ -1109,6 +1221,19 @@ export function ScenarioConsole({ scenarios, snapshots, baselineModels, user }: 
                       Run ▶
                     </button>
                   )}
+                  <button
+                    className="ghost-button"
+                    disabled={!canWrite || isPending}
+                    onClick={() => {
+                      startTransition(async () => {
+                        await toggleScenarioArchive(scenario);
+                      });
+                    }}
+                    type="button"
+                    style={{ fontSize: "0.78rem", padding: "0.35rem 0.65rem" }}
+                  >
+                    {scenario.archivedAt ? "Unarchive" : "Archive"}
+                  </button>
                 </div>
                 </div>
               );

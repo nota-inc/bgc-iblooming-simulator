@@ -53,6 +53,7 @@ The easiest mental model is:
    - notes
 
    The purpose of this page is to register one historical dataset version that will later be used in simulations.
+   Once snapshots accumulate, the team can archive older ones from the default registry view without deleting their historical truth.
 
 4. **Import the dataset**  
    After the snapshot is created, the user clicks **Import facts**.  
@@ -108,6 +109,7 @@ The easiest mental model is:
    - window length
 
    This is the policy design step: users are defining "what ALPHA rules do we want to test?"
+   Older scenarios can also be archived so the default registry stays focused on active policy candidates.
 
 8. **Run the simulation**  
    When the user clicks **Run**, the app:
@@ -154,7 +156,16 @@ The easiest mental model is:
     - reserve runway
     - reward concentration
 
-11. **Review supporting views**  
+11. **Manage historical refs in `Result Ref`**
+    Completed runs are also collected in the `Result Ref` page.
+    This page is used to:
+    - browse saved run references
+    - pin important refs so they stay easy to find and are protected for future cleanup policy
+    - archive older refs from the default view without deleting the underlying outputs
+
+    The current reading order in `Result Ref` puts pinned refs first, then other refs by recency.
+
+12. **Review supporting views**
     From the run page, users can open:
     - `Distribution`: ALPHA behavior, issued-share concentration, phase totals, and source-system split
     - `Treasury`: company cashflow lens first, then runway, payout pressure, internal use, and risk flags
@@ -162,7 +173,7 @@ The easiest mental model is:
 
     This is the decision layer, where raw metrics are translated into business meaning.
 
-12. **Decision Pack**  
+13. **Decision Pack**
     The system classifies the scenario internally as:
     - `candidate`
     - `risky`
@@ -185,7 +196,7 @@ The easiest mental model is:
 
     This is the artifact intended for founder discussion.
 
-13. **Compare scenarios in `Compare`**  
+14. **Compare scenarios in `Compare`**
     Finally, the team goes to `Compare`.  
     This page puts selected completed runs side by side so stakeholders can compare scenario shape and business outcome across scenarios.
 

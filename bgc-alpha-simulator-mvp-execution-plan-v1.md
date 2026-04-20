@@ -483,6 +483,16 @@ Acceptance criteria:
 - cashflow comparison is shown before ALPHA policy comparison,
 - recommendation status and key deltas are visible.
 
+`T-505A` Add archive lifecycle and pinning to result registries
+Type: Full-stack
+Depends on: `T-500`, `T-503`
+Acceptance criteria:
+
+- snapshots, scenarios, and saved run refs support reversible archive state,
+- archived objects are hidden from default registry views but not hard-deleted,
+- `Result Ref` supports pin/unpin and pinned refs are sorted first,
+- snapshot registry shows a non-destructive storage cleanup policy summary.
+
 `T-505` Build overview page with recent runs and alerts  
 Type: Frontend  
 Depends on: `T-203`, `T-500`, `T-504`  

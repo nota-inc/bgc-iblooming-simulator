@@ -28,12 +28,15 @@ This repository now supports the main internal simulator loop:
 
 - internal auth and RBAC
 - snapshot registration, metadata validation, approval, and canonical CSV import
+- reversible archive lifecycle for snapshots, scenarios, and saved result refs
 - understanding-doc-strict compatibility validation for faithful snapshot CSV uploads
 - executable `model-v1` baseline ruleset
 - founder-safe scenario creation and persistence with locked understanding-doc levers
 - queued run orchestration with worker processing
 - dataset-driven simulation over imported `SnapshotMemberMonthFact` rows
 - persisted results across summary, distribution, treasury, compare, and decision-pack views
+- Result Ref management with pinning and archive filters
+- snapshot storage cleanup policy report for non-destructive cleanup planning
 - company cashflow lens separated from ALPHA policy outputs in run, treasury, compare, and export surfaces
 - compare workflow with selected-run management, radar quick-scan, and cashflow-first comparison tables
 - founder-facing full simulation report export from run and compare surfaces

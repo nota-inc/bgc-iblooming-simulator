@@ -77,6 +77,10 @@ type CreateSnapshotImportRunInput = {
   requestedByUserId?: string | null;
 };
 
+type SnapshotListOptions = {
+  includeArchived?: boolean;
+};
+
 const issueOrderBy = [
   {
     severity: "asc" as const
@@ -117,6 +121,9 @@ export const snapshotBaseSelect = {
   approvedAt: true,
   notes: true,
   createdByUserId: true,
+  archivedAt: true,
+  archivedByUserId: true,
+  archiveReason: true,
   createdAt: true,
   updatedAt: true
 } as const;
@@ -125,6 +132,7 @@ export const snapshotDefaultRelationSelect = {
   id: true,
   name: true,
   validationStatus: true,
+  archivedAt: true,
   _count: {
     select: {
       memberMonthFacts: true
@@ -134,7 +142,8 @@ export const snapshotDefaultRelationSelect = {
 
 export const runSnapshotSelect = {
   id: true,
-  name: true
+  name: true,
+  archivedAt: true
 } as const;
 
 const snapshotImportRunWithIssuesSelect = {
@@ -171,7 +180,10 @@ const snapshotSelect = {
   },
   _count: {
     select: {
-      memberMonthFacts: true
+      memberMonthFacts: true,
+      importRuns: true,
+      scenarios: true,
+      runs: true
     }
   }
 } as const;
@@ -203,8 +215,13 @@ export function isMissingDatasetSnapshotCanonicalSourceSnapshotKeyColumn(error: 
   return columnName.includes("DatasetSnapshot.canonicalSourceSnapshotKey");
 }
 
-export async function listSnapshots() {
+export async function listSnapshots(options: SnapshotListOptions = {}) {
   return prisma.datasetSnapshot.findMany({
+    where: options.includeArchived
+      ? undefined
+      : {
+          archivedAt: null
+        },
     select: snapshotSelect,
     orderBy: [
       {
@@ -659,4 +676,166 @@ export async function approveSnapshot(snapshotId: string, approvedByUserId: stri
     },
     select: snapshotValidationSelect
   });
+}
+
+export async function archiveSnapshot(
+  snapshotId: string,
+  input: {
+    archivedByUserId?: string | null;
+    reason?: string | null;
+  }
+) {
+  return prisma.datasetSnapshot.update({
+    where: {
+      id: snapshotId
+    },
+    data: {
+      archivedAt: new Date(),
+      archivedByUserId: input.archivedByUserId ?? null,
+      archiveReason: input.reason ?? null
+    },
+    select: snapshotSelect
+  });
+}
+
+export async function unarchiveSnapshot(snapshotId: string) {
+  return prisma.datasetSnapshot.update({
+    where: {
+      id: snapshotId
+    },
+    data: {
+      archivedAt: null,
+      archivedByUserId: null,
+      archiveReason: null
+    },
+    select: snapshotSelect
+  });
+}
+
+export async function getSnapshotStorageCleanupReport() {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const [snapshots, failedImportRuns, failedImportCandidateCount] = await Promise.all([
+    prisma.datasetSnapshot.findMany({
+      select: {
+        id: true,
+        name: true,
+        canonicalSourceSnapshotKey: true,
+        fileUri: true,
+        archivedAt: true,
+        createdAt: true,
+        _count: {
+          select: {
+            scenarios: true,
+            runs: true,
+            importRuns: true,
+            memberMonthFacts: true,
+            canonicalMembers: true,
+            canonicalBusinessEvents: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: "desc"
+      }
+    }),
+    prisma.snapshotImportRun.findMany({
+      where: {
+        status: SnapshotImportStatus.FAILED,
+        completedAt: {
+          lt: thirtyDaysAgo
+        }
+      },
+      select: {
+        id: true,
+        snapshotId: true,
+        createdAt: true,
+        completedAt: true,
+        snapshot: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      },
+      orderBy: {
+        completedAt: "asc"
+      },
+      take: 10
+    }),
+    prisma.snapshotImportRun.count({
+      where: {
+        status: SnapshotImportStatus.FAILED,
+        completedAt: {
+          lt: thirtyDaysAgo
+        }
+      }
+    })
+  ]);
+
+  const archivedSnapshots = snapshots.filter((snapshot) => Boolean(snapshot.archivedAt));
+  const lockedSnapshots = snapshots.filter(
+    (snapshot) => snapshot._count.scenarios > 0 || snapshot._count.runs > 0
+  );
+  const unreferencedArchivedSnapshots = archivedSnapshots.filter(
+    (snapshot) => snapshot._count.scenarios === 0 && snapshot._count.runs === 0
+  );
+  const rawFileCleanupCandidates = unreferencedArchivedSnapshots.filter((snapshot) =>
+    Boolean(snapshot.fileUri)
+  );
+
+  type CleanupSnapshotRecord = (typeof snapshots)[number];
+  const duplicateGroups = new Map<string, CleanupSnapshotRecord[]>();
+  for (const snapshot of snapshots) {
+    if (!snapshot.canonicalSourceSnapshotKey) {
+      continue;
+    }
+
+    const group = duplicateGroups.get(snapshot.canonicalSourceSnapshotKey) ?? [];
+    group.push(snapshot);
+    duplicateGroups.set(snapshot.canonicalSourceSnapshotKey, group);
+  }
+
+  const supersedeCandidates = [...duplicateGroups.values()].flatMap((group) => {
+    if (group.length < 2) {
+      return [];
+    }
+
+    const ordered = [...group].sort(
+      (left, right) => right.createdAt.getTime() - left.createdAt.getTime()
+    );
+    return ordered.slice(1);
+  });
+
+  return {
+    totals: {
+      archivedSnapshots: archivedSnapshots.length,
+      lockedSnapshots: lockedSnapshots.length,
+      unreferencedArchivedSnapshots: unreferencedArchivedSnapshots.length,
+      rawFileCleanupCandidates: rawFileCleanupCandidates.length,
+      failedImportCandidates: failedImportCandidateCount,
+      supersedeCandidates: supersedeCandidates.length
+    },
+    rawFileCleanupCandidates: rawFileCleanupCandidates.slice(0, 10).map((snapshot) => ({
+      id: snapshot.id,
+      name: snapshot.name,
+      archivedAt: snapshot.archivedAt?.toISOString() ?? null,
+      scenarioRefs: snapshot._count.scenarios,
+      runRefs: snapshot._count.runs
+    })),
+    failedImportCandidates: failedImportRuns.map((run) => ({
+      id: run.id,
+      snapshotId: run.snapshotId,
+      snapshotName: run.snapshot.name,
+      completedAt: run.completedAt?.toISOString() ?? null
+    })),
+    supersedeCandidates: supersedeCandidates.slice(0, 10).map((snapshot) => ({
+      id: snapshot.id,
+      name: snapshot.name,
+      canonicalSourceSnapshotKey: snapshot.canonicalSourceSnapshotKey,
+      createdAt: snapshot.createdAt.toISOString(),
+      scenarioRefs: snapshot._count.scenarios,
+      runRefs: snapshot._count.runs
+    }))
+  };
 }

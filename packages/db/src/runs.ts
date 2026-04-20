@@ -13,6 +13,10 @@ type CreateSimulationRunInput = {
   seedHash?: string | null;
 };
 
+type RunListOptions = {
+  includeArchived?: boolean;
+};
+
 type PersistCompletedRunInput = {
   summaryMetrics: Record<string, number>;
   timeSeriesMetrics: Array<{
@@ -93,8 +97,17 @@ const duplicateBlockingStatuses = [
   RunStatus.COMPLETED
 ] as const;
 
-export async function listRuns() {
+function buildRunArchiveWhere(options: RunListOptions = {}) {
+  return options.includeArchived
+    ? undefined
+    : {
+        archivedAt: null
+      };
+}
+
+export async function listRuns(options: RunListOptions = {}) {
   return prisma.simulationRun.findMany({
+    where: buildRunArchiveWhere(options),
     include: runInclude,
     orderBy: {
       createdAt: "desc"
@@ -102,11 +115,14 @@ export async function listRuns() {
   });
 }
 
-export async function listRunReferences() {
+export async function listRunReferences(options: RunListOptions = {}) {
   return prisma.simulationRun.findMany({
+    where: buildRunArchiveWhere(options),
     select: {
       id: true,
       status: true,
+      archivedAt: true,
+      isPinned: true,
       createdAt: true,
       completedAt: true,
       scenario: {
@@ -134,10 +150,11 @@ export async function listRunReferences() {
   });
 }
 
-export async function listCompletedRuns() {
+export async function listCompletedRuns(options: RunListOptions = {}) {
   return prisma.simulationRun.findMany({
     where: {
-      status: RunStatus.COMPLETED
+      status: RunStatus.COMPLETED,
+      ...(buildRunArchiveWhere(options) ?? {})
     },
     include: runInclude,
     orderBy: {
@@ -202,6 +219,7 @@ export async function createSimulationRunIfUnique(input: CreateSimulationRunInpu
     const duplicateOf = await tx.simulationRun.findFirst({
       where: {
         seedHash: input.seedHash,
+        archivedAt: null,
         status: {
           in: [...duplicateBlockingStatuses]
         }
@@ -337,5 +355,51 @@ export async function markRunFailed(runId: string, message: string) {
       completedAt: new Date(),
       runNotes: message
     }
+  });
+}
+
+export async function archiveRun(
+  runId: string,
+  input: {
+    archivedBy?: string | null;
+    reason?: string | null;
+  }
+) {
+  return prisma.simulationRun.update({
+    where: {
+      id: runId
+    },
+    data: {
+      archivedAt: new Date(),
+      archivedBy: input.archivedBy ?? null,
+      archiveReason: input.reason ?? null
+    },
+    include: runInclude
+  });
+}
+
+export async function unarchiveRun(runId: string) {
+  return prisma.simulationRun.update({
+    where: {
+      id: runId
+    },
+    data: {
+      archivedAt: null,
+      archivedBy: null,
+      archiveReason: null
+    },
+    include: runInclude
+  });
+}
+
+export async function setRunPinned(runId: string, pinned: boolean) {
+  return prisma.simulationRun.update({
+    where: {
+      id: runId
+    },
+    data: {
+      isPinned: pinned
+    },
+    include: runInclude
   });
 }

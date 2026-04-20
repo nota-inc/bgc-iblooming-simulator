@@ -124,6 +124,19 @@ It stores:
 
 Important: the current engine is deterministic at the imported `member-month` fact grain. It is not a raw event replay engine.
 
+Archive state is separate from run status. A run can still be `COMPLETED` while being archived from the default `Result Ref` view.
+
+### Result Ref
+
+`Result Ref` is the registry page for saved simulation runs.
+
+It is used to:
+
+- browse saved refs
+- open a completed run quickly
+- pin important refs for long-term retention
+- archive older refs from the default view without deleting outputs
+
 ### Decision Pack
 
 A `decision pack` is the founder-facing recommendation artifact generated after a run.
@@ -150,6 +163,8 @@ The `Snapshots` screen is where users:
 - queue snapshot imports
 - run validation
 - approve snapshots for simulation use
+- archive older snapshots from the default registry view
+- review a storage cleanup policy summary without purging data
 
 ### Scenarios
 
@@ -159,15 +174,18 @@ The `Scenarios` screen is where users:
 - attach a baseline model
 - assign a default snapshot
 - launch runs
+- archive older scenarios from the default registry view
 
-### Runs
+### Result Ref / Runs
 
-The `Runs` screen shows:
+The `Result Ref` registry and run-detail flow show:
 
 - run status
 - summary metrics
 - flags
 - decision links
+- archive filters
+- pinned refs first in the default reading order
 
 ### Distribution
 
@@ -283,6 +301,22 @@ Important: a run can only launch against an `APPROVED` snapshot.
 - `RUNNING`: worker has started processing the run
 - `COMPLETED`: outputs were persisted successfully
 - `FAILED`: execution failed
+
+### Archive State
+
+- `active`: object appears in the default registry view
+- `archived`: object is hidden from the default registry view but kept for history
+
+This archive state currently applies to:
+
+- snapshots
+- scenarios
+- saved run refs
+
+### Pinned Run Ref
+
+- `pinned`: saved run ref is prioritized in the `Result Ref` page and marked for long-term retention
+- `unpinned`: saved run ref follows the normal ordering
 
 ### Decision Pack Export Status
 

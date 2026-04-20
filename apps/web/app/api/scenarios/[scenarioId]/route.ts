@@ -110,6 +110,17 @@ export async function PATCH(
           }
         );
       }
+
+      if (snapshot.archivedAt) {
+        return NextResponse.json(
+          {
+            error: "snapshot_archived"
+          },
+          {
+            status: 409
+          }
+        );
+      }
     }
 
     const baselineModel = resolveBaselineModelRuleset(

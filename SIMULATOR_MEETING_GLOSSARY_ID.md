@@ -27,6 +27,8 @@ Prinsip membaca dokumen ini:
 | `rowCountImported` | Jumlah baris yang berhasil lolos import. | Ini jumlah row yang benar-benar berhasil diproses. |
 | `importedFactCount` | Jumlah canonical facts aktif yang saat ini tersimpan di sistem. | Ini angka yang paling dekat dengan "berapa data aktif yang benar-benar siap dipakai simulasi sekarang". |
 | `Approve` | Persetujuan akhir agar snapshot bisa dipakai untuk run. | Run tidak bisa jalan jika snapshot belum `APPROVED`. |
+| `Archive` | Menyembunyikan snapshot dari tampilan aktif tanpa menghapus data historis. | Dipakai untuk merapikan registry, bukan menghemat storage secara langsung. |
+| `Storage Cleanup Policy` | Ringkasan kandidat cleanup storage untuk snapshot/import lama. | Ini laporan kandidat cleanup, bukan aksi delete otomatis. |
 
 ### Status snapshot yang penting
 
@@ -63,6 +65,15 @@ Prinsip membaca dokumen ini:
 | `Recommendation` | Ringkasan kesimpulan decision pack. | Ini kalimat singkat yang menjawab apakah skenario layak dipertimbangkan. |
 | `Evaluated Scenario Basis` | Ringkasan setup skenario yang sedang dinilai. | Ini bukan truth historis; ini basis evaluasi untuk run yang sedang dibahas. |
 | `Blockers / Rejection Reasons` | Kondisi atau setup yang membuat skenario tertahan. | Menjelaskan kenapa skenario tidak ideal atau perlu revisi. |
+
+## Halaman `Result Ref`
+
+| Istilah | Arti singkat untuk meeting | Cara baca cepat |
+| --- | --- | --- |
+| `Result Ref` | Registry hasil run yang sudah tersimpan. | Anggap sebagai daftar histori eksperimen policy yang bisa dibuka lagi. |
+| `Pin` | Menandai ref penting agar diprioritaskan dan dijaga untuk retensi. | Ref yang di-pin muncul lebih atas di daftar. |
+| `Archive` | Menyembunyikan ref lama dari tampilan default tanpa menghapus output. | Dipakai untuk merapikan histori yang aktif dilihat tim. |
+| `Pinned` | Tanda bahwa ref dianggap penting. | Biasanya ref ini dipakai sebagai baseline diskusi atau pembanding inti. |
 
 ## Summary metrics di halaman `Run`
 
@@ -168,4 +179,5 @@ Tambahan cara baca yang lebih tepat:
 
 - `Snapshots` = memastikan data historisnya siap dan terpercaya
 - `Run` = melihat hasil satu skenario secara detail
+- `Result Ref` = mengelola histori run yang penting, aktif, atau diarsipkan
 - `Compare` = memilih skenario terbaik dengan membandingkan metrik utama

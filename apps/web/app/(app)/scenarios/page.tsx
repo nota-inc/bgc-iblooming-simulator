@@ -19,7 +19,11 @@ export default async function ScenariosPage() {
   const databaseConfigured = hasDatabaseUrl();
   const user = await requirePageUser(["scenarios.read"]);
   const [scenarios, snapshots, baselineModels] = databaseConfigured
-    ? await Promise.all([listScenarios(), listSnapshots(), listBaselineModelVersions()])
+    ? await Promise.all([
+        listScenarios({ includeArchived: true }),
+        listSnapshots({ includeArchived: true }),
+        listBaselineModelVersions()
+      ])
     : [[], [], []];
 
   return (
@@ -64,6 +68,8 @@ export default async function ScenariosPage() {
                 status: scenario.runs[0].status
               }
             : null,
+          runCount: scenario._count.runs,
+          archivedAt: scenario.archivedAt?.toISOString() ?? null,
           parameterJson: parseFounderSafeScenarioParameters(scenario.parameterJson, {
             reward_global_factor: resolveBaselineModelRuleset(
               scenario.modelVersion.rulesetJson,
@@ -79,7 +85,8 @@ export default async function ScenariosPage() {
                 id: scenario.snapshotDefault.id,
                 name: scenario.snapshotDefault.name,
                 validationStatus: scenario.snapshotDefault.validationStatus,
-                importedFactCount: scenario.snapshotDefault._count.memberMonthFacts
+                importedFactCount: scenario.snapshotDefault._count.memberMonthFacts,
+                archivedAt: scenario.snapshotDefault.archivedAt?.toISOString() ?? null
               }
             : null,
           updatedAt: scenario.updatedAt.toISOString()
@@ -88,7 +95,8 @@ export default async function ScenariosPage() {
           id: snapshot.id,
           name: snapshot.name,
           validationStatus: snapshot.validationStatus,
-          importedFactCount: snapshot._count.memberMonthFacts
+          importedFactCount: snapshot._count.memberMonthFacts,
+          archivedAt: snapshot.archivedAt?.toISOString() ?? null
         }))}
         user={user}
       />

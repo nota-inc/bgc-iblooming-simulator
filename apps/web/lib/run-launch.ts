@@ -48,6 +48,17 @@ export async function launchSimulationRun({
       );
     }
 
+    if (scenario.archivedAt) {
+      return NextResponse.json(
+        {
+          error: "scenario_archived"
+        },
+        {
+          status: 409
+        }
+      );
+    }
+
     const baselineModel = resolveBaselineModelRuleset(
       scenario.modelVersion.rulesetJson,
       scenario.modelVersion.versionName
@@ -95,6 +106,17 @@ export async function launchSimulationRun({
         },
         {
           status: 400
+        }
+      );
+    }
+
+    if (snapshot.archivedAt) {
+      return NextResponse.json(
+        {
+          error: "snapshot_archived"
+        },
+        {
+          status: 409
         }
       );
     }
