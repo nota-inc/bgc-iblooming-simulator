@@ -180,6 +180,7 @@ Recommended MVP screens:
 - `Overview`
 - `Data Snapshot`
 - `Scenario Builder`
+- `Result Ref`
 - `Run Results`
 - `Compare Runs`
 - `Distribution`

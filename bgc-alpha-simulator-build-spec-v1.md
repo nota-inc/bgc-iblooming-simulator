@@ -219,6 +219,7 @@ Manage the dataset snapshot used for simulation.
 - trigger validation
 - mark snapshot as approved for simulation
 - archive old snapshot
+- inspect storage cleanup candidates without purging active truth
 
 ### Required Fields per Snapshot
 
@@ -252,6 +253,7 @@ Create, edit, and save policy scenarios.
 - parameter form grouped by category
 - assumption notes
 - save and run actions
+- archive and unarchive actions for saved scenarios
 
 ### Parameter Groups
 
@@ -341,6 +343,8 @@ Show the output of one simulation run.
 - snapshot used
 - model version used
 - run status
+- archive state
+- pin state
 
 ### States
 
@@ -348,6 +352,15 @@ Show the output of one simulation run.
 - running
 - completed
 - failed
+
+### Result Ref Registry
+
+Saved run refs must support:
+
+- active / archived / all filters
+- pin and unpin actions
+- pinned-first ordering in the default registry view
+- archive as a reversible visibility action rather than hard delete
 
 ## 8.5 Compare Runs
 

@@ -124,6 +124,19 @@ Run menyimpan:
 
 Penting: engine saat ini bersifat deterministik pada granularitas imported `member-month` fact. Ini bukan engine replay event mentah.
 
+State archive terpisah dari status run. Sebuah run bisa tetap `COMPLETED`, tetapi di-archive dari tampilan default `Result Ref`.
+
+### Result Ref
+
+`Result Ref` adalah halaman registry untuk run hasil simulasi yang sudah tersimpan.
+
+Halaman ini dipakai untuk:
+
+- melihat daftar ref yang sudah tersimpan
+- membuka completed run dengan cepat
+- menandai ref penting dengan `Pin` untuk retensi jangka panjang
+- meng-archive ref lama dari tampilan default tanpa menghapus output
+
 ### Decision Pack
 
 `decision pack` adalah artefak rekomendasi untuk founder yang dihasilkan setelah sebuah run selesai.
@@ -150,6 +163,8 @@ Layar `Snapshots` adalah tempat user:
 - me-queue snapshot imports
 - menjalankan validasi
 - menyetujui snapshot untuk dipakai dalam simulasi
+- meng-archive snapshot lama dari registry default
+- melihat ringkasan storage cleanup policy tanpa menghapus data
 
 ### Scenarios
 
@@ -159,15 +174,18 @@ Layar `Scenarios` adalah tempat user:
 - menghubungkan baseline model
 - menetapkan default snapshot
 - menjalankan run
+- meng-archive scenario lama dari registry default
 
-### Runs
+### Result Ref / Runs
 
-Layar `Runs` menampilkan:
+Registry `Result Ref` dan alur detail run menampilkan:
 
 - status run
 - summary metrics
 - flags
 - decision links
+- filter archive
+- ref yang di-pin muncul lebih dulu pada urutan baca default
 
 ### Distribution
 
@@ -283,6 +301,22 @@ Penting: sebuah run hanya bisa dijalankan terhadap snapshot dengan status `APPRO
 - `RUNNING`: worker sudah mulai memproses run
 - `COMPLETED`: output berhasil dipersist
 - `FAILED`: eksekusi gagal
+
+### Archive State
+
+- `active`: object muncul di registry default
+- `archived`: object disembunyikan dari registry default tetapi tetap disimpan untuk histori
+
+State archive saat ini berlaku untuk:
+
+- snapshots
+- scenarios
+- saved run refs
+
+### Pinned Run Ref
+
+- `pinned`: saved run ref diprioritaskan di halaman `Result Ref` dan ditandai untuk retensi jangka panjang
+- `unpinned`: saved run ref mengikuti urutan normal
 
 ### Decision Pack Export Status
 

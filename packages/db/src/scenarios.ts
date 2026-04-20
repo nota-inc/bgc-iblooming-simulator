@@ -13,6 +13,10 @@ type ScenarioUpsertInput = {
   createdBy?: string | null;
 };
 
+type ScenarioListOptions = {
+  includeArchived?: boolean;
+};
+
 const scenarioSelect = {
   id: true,
   name: true,
@@ -22,6 +26,9 @@ const scenarioSelect = {
   modelVersionId: true,
   parameterJson: true,
   createdBy: true,
+  archivedAt: true,
+  archivedByUserId: true,
+  archiveReason: true,
   createdAt: true,
   updatedAt: true,
   modelVersion: true,
@@ -39,11 +46,21 @@ const scenarioSelect = {
       createdAt: true,
       completedAt: true
     }
+  },
+  _count: {
+    select: {
+      runs: true
+    }
   }
 } as const;
 
-export async function listScenarios() {
+export async function listScenarios(options: ScenarioListOptions = {}) {
   return prisma.scenario.findMany({
+    where: options.includeArchived
+      ? undefined
+      : {
+          archivedAt: null
+        },
     select: scenarioSelect,
     orderBy: {
       updatedAt: "desc"
@@ -90,6 +107,40 @@ export async function updateScenario(
       snapshotIdDefault: input.snapshotIdDefault ?? null,
       modelVersionId: input.modelVersionId,
       parameterJson: input.parameterJson
+    },
+    select: scenarioSelect
+  });
+}
+
+export async function archiveScenario(
+  scenarioId: string,
+  input: {
+    archivedByUserId?: string | null;
+    reason?: string | null;
+  }
+) {
+  return prisma.scenario.update({
+    where: {
+      id: scenarioId
+    },
+    data: {
+      archivedAt: new Date(),
+      archivedByUserId: input.archivedByUserId ?? null,
+      archiveReason: input.reason ?? null
+    },
+    select: scenarioSelect
+  });
+}
+
+export async function unarchiveScenario(scenarioId: string) {
+  return prisma.scenario.update({
+    where: {
+      id: scenarioId
+    },
+    data: {
+      archivedAt: null,
+      archivedByUserId: null,
+      archiveReason: null
     },
     select: scenarioSelect
   });

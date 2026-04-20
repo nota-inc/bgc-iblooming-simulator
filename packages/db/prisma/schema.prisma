@@ -230,6 +230,9 @@ model DatasetSnapshot {
   approvedAt        DateTime?
   notes             String?
   createdByUserId   String?
+  archivedAt        DateTime?
+  archivedByUserId  String?
+  archiveReason     String?
   createdAt         DateTime                 @default(now())
   updatedAt         DateTime                 @updatedAt
   validationIssues  SnapshotValidationIssue[]
@@ -253,6 +256,7 @@ model DatasetSnapshot {
 
   @@index([validationStatus, createdAt(sort: Desc)])
   @@index([dateFrom, dateTo])
+  @@index([archivedAt, createdAt(sort: Desc)])
 }
 
 model SnapshotValidationIssue {
@@ -681,6 +685,9 @@ model Scenario {
   modelVersionId   String
   parameterJson    Json
   createdBy        String?
+  archivedAt       DateTime?
+  archivedByUserId String?
+  archiveReason    String?
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
   snapshotDefault  DatasetSnapshot?     @relation(fields: [snapshotIdDefault], references: [id])
@@ -689,6 +696,7 @@ model Scenario {
 
   @@index([modelVersionId, createdAt(sort: Desc)])
   @@index([snapshotIdDefault])
+  @@index([archivedAt, updatedAt(sort: Desc)])
 }
 
 model SimulationRun {
@@ -703,6 +711,10 @@ model SimulationRun {
   engineVersion   String?
   seedHash        String?
   runNotes        String?
+  archivedAt      DateTime?
+  archivedBy      String?
+  archiveReason   String?
+  isPinned        Boolean              @default(false)
   createdAt       DateTime             @default(now())
   scenario        Scenario             @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
   snapshot        DatasetSnapshot      @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
@@ -715,6 +727,8 @@ model SimulationRun {
 
   @@index([status, createdAt(sort: Desc)])
   @@index([scenarioId, createdAt(sort: Desc)])
+  @@index([archivedAt, completedAt(sort: Desc)])
+  @@index([isPinned, completedAt(sort: Desc)])
 }
 
 model RunSummaryMetric {

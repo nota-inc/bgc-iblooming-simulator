@@ -53,6 +53,7 @@ Cara paling gampang memahaminya:
    - catatan
 
    Tujuan halaman ini adalah mendaftarkan satu versi dataset historis yang nanti akan dipakai untuk simulasi.
+   Kalau snapshot makin banyak, tim bisa meng-archive snapshot lama dari registry default tanpa menghapus truth historisnya.
 
 4. **Import dataset**  
    Setelah snapshot dibuat, user klik **Import facts**.  
@@ -108,6 +109,7 @@ Cara paling gampang memahaminya:
    - window length
 
    Ini adalah tahap desain kebijakan: user sedang menentukan “aturan ALPHA seperti apa yang ingin kita uji?”
+   Scenario lama juga bisa di-archive agar registry default tetap fokus pada kandidat policy yang masih aktif.
 
 8. **Run the simulation**  
    Saat user klik **Run**, aplikasi akan:
@@ -154,7 +156,16 @@ Cara paling gampang memahaminya:
     - reserve runway
     - reward concentration
 
-11. **Review supporting views**  
+11. **Kelola histori run di `Result Ref`**
+    Completed run juga dikumpulkan di halaman `Result Ref`.
+    Halaman ini dipakai untuk:
+    - melihat daftar ref hasil run yang sudah tersimpan
+    - menandai ref penting dengan `Pin` supaya mudah ditemukan dan aman untuk kebijakan cleanup di masa depan
+    - meng-archive ref lama dari tampilan default tanpa menghapus output dasarnya
+
+    Urutan baca `Result Ref` saat ini menaruh ref yang dipin lebih dulu, lalu ref lain berdasarkan recency.
+
+12. **Review supporting views**
     Dari halaman run, user bisa membuka:
     - `Distribution`: perilaku ALPHA, konsentrasi issued share, total per fase, dan split per source system
     - `Treasury`: company cashflow lens lebih dulu, lalu runway, payout pressure, internal use, dan risk flags
@@ -162,7 +173,7 @@ Cara paling gampang memahaminya:
 
     Ini adalah lapisan keputusan, di mana metrik mentah diterjemahkan menjadi makna bisnis.
 
-12. **Decision Pack**  
+13. **Decision Pack**
     Sistem akan mengklasifikasikan scenario secara internal sebagai:
     - `candidate`
     - `risky`
@@ -185,7 +196,7 @@ Cara paling gampang memahaminya:
 
     Ini adalah artefak yang memang ditujukan untuk diskusi founder.
 
-13. **Compare scenarios di `Compare`**  
+14. **Compare scenarios di `Compare`**
     Terakhir, tim masuk ke halaman `Compare`.  
     Halaman ini menampilkan completed runs terpilih secara side by side, sehingga stakeholder bisa membandingkan shape skenario dan outcome bisnis antar scenario.
 

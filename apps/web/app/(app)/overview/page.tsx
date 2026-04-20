@@ -28,19 +28,30 @@ export default async function OverviewPage() {
     snapshots,
     scenarios,
     runStatusGroups,
+    archivedRunCount,
     importedFactCount,
     latestCompletedRun,
   ] = databaseConfigured
     ? await Promise.all([
-        listSnapshots(),
-        listScenarios(),
+        listSnapshots({ includeArchived: true }),
+        listScenarios({ includeArchived: true }),
         prisma.simulationRun.groupBy({
           by: ["status"],
+          where: {
+            archivedAt: null
+          },
           _count: { _all: true },
+        }),
+        prisma.simulationRun.count({
+          where: {
+            archivedAt: {
+              not: null
+            }
+          }
         }),
         prisma.snapshotMemberMonthFact.count(),
         prisma.simulationRun.findFirst({
-          where: { status: "COMPLETED" },
+          where: { status: "COMPLETED", archivedAt: null },
           orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }],
           select: {
             id: true,
@@ -64,17 +75,19 @@ export default async function OverviewPage() {
           },
         }),
       ])
-    : [[], [], [], 0, null];
+    : [[], [], [], 0, 0, null];
 
   const approvedSnapshots = snapshots.filter(
-    (s) => s.validationStatus === "APPROVED"
+    (s) => !s.archivedAt && s.validationStatus === "APPROVED"
   ).length;
   const importedSnapshots = snapshots.filter(
-    (s) => s._count.memberMonthFacts > 0
+    (s) => !s.archivedAt && s._count.memberMonthFacts > 0
   ).length;
   const readyScenarios = scenarios.filter((s) =>
-    Boolean(s.snapshotIdDefault)
+    !s.archivedAt && Boolean(s.snapshotIdDefault)
   ).length;
+  const archivedSnapshots = snapshots.filter((snapshot) => Boolean(snapshot.archivedAt)).length;
+  const archivedScenarios = scenarios.filter((scenario) => Boolean(scenario.archivedAt)).length;
 
   const runCounts = { QUEUED: 0, RUNNING: 0, COMPLETED: 0, FAILED: 0 };
   for (const group of runStatusGroups) {
@@ -122,21 +135,21 @@ export default async function OverviewPage() {
         <Card className="span-4" title="Snapshots" variant="metric">
           <p className="metric">{formatCount(snapshots.length)}</p>
           <p className="metric-sub">
-            {approvedSnapshots} approved · {importedSnapshots} imported · {formatCount(importedFactCount)} rows
+            {approvedSnapshots} approved · {importedSnapshots} imported · {archivedSnapshots} archived · {formatCount(importedFactCount)} rows
           </p>
         </Card>
 
         <Card className="span-4" title="Scenarios" variant="metric">
           <p className="metric">{formatCount(scenarios.length)}</p>
           <p className="metric-sub">
-            {readyScenarios} ready to run
+            {readyScenarios} ready to run · {archivedScenarios} archived
           </p>
         </Card>
 
         <Card className="span-4" title="Simulation Runs" variant="metric">
           <p className="metric">{formatCount(totalRuns)}</p>
           <p className="metric-sub">
-            {runCounts.COMPLETED} completed · {runCounts.RUNNING} running · {runCounts.QUEUED} queued
+            {runCounts.COMPLETED} completed · {runCounts.RUNNING} running · {runCounts.QUEUED} queued · {archivedRunCount} archived
           </p>
         </Card>
 

@@ -28,6 +28,17 @@ export async function POST(
     );
   }
 
+  if (snapshot.archivedAt) {
+    return NextResponse.json(
+      {
+        error: "snapshot_archived"
+      },
+      {
+        status: 409
+      }
+    );
+  }
+
   const latestImportRun = snapshot.importRuns[0];
 
   if (latestImportRun && ["QUEUED", "RUNNING"].includes(latestImportRun.status)) {
