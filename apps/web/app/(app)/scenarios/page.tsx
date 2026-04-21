@@ -89,6 +89,16 @@ export default async function ScenariosPage() {
                 archivedAt: scenario.snapshotDefault.archivedAt?.toISOString() ?? null
               }
             : null,
+          adoptedBaselineRunId: scenario.adoptedBaselineRunId ?? null,
+          adoptedBaselineAt: scenario.adoptedBaselineAt?.toISOString() ?? null,
+          adoptedBaselineNote: scenario.adoptedBaselineNote ?? null,
+          adoptedBaselineRun: scenario.adoptedBaselineRun
+            ? {
+                id: scenario.adoptedBaselineRun.id,
+                status: scenario.adoptedBaselineRun.status,
+                completedAt: scenario.adoptedBaselineRun.completedAt?.toISOString() ?? null
+              }
+            : null,
           updatedAt: scenario.updatedAt.toISOString()
         }))}
         snapshots={snapshots.map((snapshot) => ({

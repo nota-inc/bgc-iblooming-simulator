@@ -6,9 +6,14 @@ import { useEffect, useRef, useState, useTransition } from "react";
 
 import type { AppSessionUser } from "@/lib/auth-session";
 import {
+  getCanonicalGapStatusLabel,
   getDataSetStatusLabel,
+  getHistoricalTruthCoverageLabel,
   getImportStatusLabel,
-  getRiskSeverityLabel
+  getRiskSeverityLabel,
+  getSnapshotFounderReadinessLabel,
+  getSnapshotSourceTypeLabel,
+  getSnapshotValidationBasisLabel
 } from "@/lib/common-language";
 import {
   createSnapshotUploadPathname,
@@ -21,6 +26,11 @@ type SnapshotRecord = {
   name: string;
   sourceSystems: string[];
   canonicalSourceSnapshotKey?: string | null;
+  sourceType: string;
+  validatedVia: string;
+  truthNotes: string | null;
+  supersededBySnapshotId: string | null;
+  supersededBySnapshot: { id: string; name: string } | null;
   dateFrom: string;
   dateTo: string;
   fileUri: string;
@@ -33,6 +43,35 @@ type SnapshotRecord = {
   scenarioRefCount: number;
   runRefCount: number;
   archivedAt: string | null;
+  manifest: {
+    sourceType: "compatibility_csv" | "canonical_json" | "canonical_bundle" | "hybrid_verified";
+    validatedVia: "monthly_facts" | "canonical_events" | "hybrid_validation";
+    truthLevel: "strong" | "partial" | "weak";
+    founderReadiness: "founder_safe" | "needs_canonical_closure";
+    summary: string;
+    truthNotes?: string | null;
+    supersededBySnapshotId?: string | null;
+  } | null;
+  truthCoverage: {
+    status: "strong" | "partial" | "weak";
+    summary: string;
+    rows: Array<{
+      key: string;
+      label: string;
+      status: "available" | "partial" | "missing";
+      detail: string;
+    }>;
+  } | null;
+  canonicalGapAudit: {
+    readiness: "strong" | "partial" | "weak";
+    summary: string;
+    rows: Array<{
+      key: string;
+      label: string;
+      status: "covered" | "partial" | "missing";
+      detail: string;
+    }>;
+  } | null;
   latestImportRun: {
     id: string;
     status: string;
@@ -113,6 +152,10 @@ type ImportResponse = {
 const defaultFormState = {
   name: "",
   sourceSystems: "bgc, iblooming",
+  sourceType: "compatibility_csv",
+  validatedVia: "monthly_facts",
+  truthNotes: "",
+  supersededBySnapshotId: "",
   dateFrom: "",
   dateTo: "",
   fileUri: "",
@@ -190,6 +233,19 @@ function getSnapshotImportErrorMessage(errorCode: string | undefined, snapshotNa
   }
 }
 
+function formatCleanupDate(value: string | null | undefined) {
+  if (!value) {
+    return "Unknown date";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "Unknown date";
+  }
+
+  return parsed.toISOString().slice(0, 10);
+}
+
 export function SnapshotConsole({ snapshots, blobUploadsEnabled, cleanupReport, user }: SnapshotConsoleProps) {
   const router = useRouter();
   const [formState, setFormState] = useState(defaultFormState);
@@ -199,6 +255,7 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, cleanupReport, 
   const [showForm, setShowForm] = useState(false);
   const [snapshotScope, setSnapshotScope] = useState<SnapshotScope>("active");
   const [expandedIssues, setExpandedIssues] = useState<Set<string>>(new Set());
+  const [expandedCleanupSections, setExpandedCleanupSections] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const canWrite = user.capabilities.includes("snapshots.write");
@@ -219,6 +276,44 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, cleanupReport, 
         return !snapshot.archivedAt;
     }
   });
+  const cleanupSections = cleanupReport
+    ? [
+        {
+          key: "raw-files",
+          title: "Raw File Cleanup Candidates",
+          count: cleanupReport.totals.rawFileCleanupCandidates,
+          summary: "Archived snapshots with no scenario or run dependency.",
+          rows: cleanupReport.rawFileCleanupCandidates.map((candidate) => (
+            <li key={candidate.id}>
+              <strong>{candidate.name}</strong> · archived {formatCleanupDate(candidate.archivedAt)} · {candidate.scenarioRefs} scenario refs · {candidate.runRefs} run refs
+            </li>
+          )),
+        },
+        {
+          key: "failed-imports",
+          title: "Failed Import Logs",
+          count: cleanupReport.totals.failedImportCandidates,
+          summary: "Old failed import logs that can be removed without changing truth data.",
+          rows: cleanupReport.failedImportCandidates.map((candidate) => (
+            <li key={candidate.id}>
+              <strong>{candidate.snapshotName}</strong> · failed run logged {formatCleanupDate(candidate.completedAt)}
+            </li>
+          )),
+        },
+        {
+          key: "duplicates",
+          title: "Duplicate Source Snapshot Candidates",
+          count: cleanupReport.totals.supersedeCandidates,
+          summary: "Later superseded snapshots that still duplicate the same source key.",
+          rows: cleanupReport.supersedeCandidates.map((candidate) => (
+            <li key={candidate.id}>
+              <strong>{candidate.name}</strong> · source key {candidate.canonicalSourceSnapshotKey ?? "none"} · {candidate.scenarioRefs} scenario refs · {candidate.runRefs} run refs
+            </li>
+          )),
+        },
+      ]
+    : [];
+  const cleanupCandidateCount = cleanupSections.reduce((total, section) => total + section.count, 0);
 
   useEffect(() => {
     if (!hasActiveImport) {
@@ -236,6 +331,15 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, cleanupReport, 
 
   function toggleIssues(id: string) {
     setExpandedIssues(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleCleanupSection(id: string) {
+    setExpandedCleanupSections((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -377,6 +481,10 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, cleanupReport, 
                   body: JSON.stringify({
                     name: formState.name,
                     sourceSystems: formState.sourceSystems.split(",").map((s) => s.trim()).filter(Boolean),
+                    sourceType: formState.sourceType,
+                    validatedVia: formState.validatedVia,
+                    truthNotes: formState.truthNotes || null,
+                    supersededBySnapshotId: formState.supersededBySnapshotId || null,
                     dateFrom: new Date(`${formState.dateFrom}T00:00:00.000Z`).toISOString(),
                     dateTo: new Date(`${formState.dateTo}T23:59:59.999Z`).toISOString(),
                     fileUri: resolvedFileUri,
@@ -402,6 +510,33 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, cleanupReport, 
               <label className="field">
                 <span>Source systems</span>
                 <input disabled={!canWrite || isPending} onChange={(e) => setFormState((c) => ({ ...c, sourceSystems: e.target.value }))} value={formState.sourceSystems} />
+              </label>
+            </div>
+            <div className="inline-fields">
+              <label className="field">
+                <span>Source type</span>
+                <select
+                  disabled={!canWrite || isPending}
+                  onChange={(e) => setFormState((c) => ({ ...c, sourceType: e.target.value }))}
+                  value={formState.sourceType}
+                >
+                  <option value="compatibility_csv">Compatibility CSV</option>
+                  <option value="canonical_json">Canonical JSON</option>
+                  <option value="canonical_bundle">Canonical Bundle</option>
+                  <option value="hybrid_verified">Hybrid Verified</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>Validated via</span>
+                <select
+                  disabled={!canWrite || isPending}
+                  onChange={(e) => setFormState((c) => ({ ...c, validatedVia: e.target.value }))}
+                  value={formState.validatedVia}
+                >
+                  <option value="monthly_facts">Monthly facts</option>
+                  <option value="canonical_events">Canonical events</option>
+                  <option value="hybrid_validation">Hybrid validation</option>
+                </select>
               </label>
             </div>
             <div className="inline-fields">
@@ -434,6 +569,15 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, cleanupReport, 
                 <input disabled={!canWrite || isPending} onChange={(e) => setFormState((c) => ({ ...c, notes: e.target.value }))} value={formState.notes} />
               </label>
             </div>
+            <label className="field">
+              <span>Truth notes</span>
+              <input
+                disabled={!canWrite || isPending}
+                onChange={(e) => setFormState((c) => ({ ...c, truthNotes: e.target.value }))}
+                placeholder="Optional notes about truth strength or import caveats"
+                value={formState.truthNotes}
+              />
+            </label>
             {message ? <p className="muted" style={{ fontSize: "0.82rem" }}>{message}</p> : null}
             <button className="primary-button" disabled={!canWrite || isPending} type="submit" style={{ alignSelf: "flex-start" }}>
               {isPending ? "Saving..." : "Create Snapshot"}
@@ -443,40 +587,6 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, cleanupReport, 
       ) : null}
 
       {message && !showForm ? <p className="muted" style={{ fontSize: "0.82rem", marginBottom: "0.75rem" }}>{message}</p> : null}
-
-      {/* Snapshot Cards */}
-      {cleanupReport ? (
-        <div className="card" style={{ marginBottom: "1rem" }}>
-          <div style={{ display: "grid", gap: "0.4rem" }}>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", justifyContent: "space-between" }}>
-              <div>
-                <h3 style={{ marginBottom: "0.2rem" }}>Storage Cleanup Policy</h3>
-                <p className="muted" style={{ fontSize: "0.8rem", margin: 0 }}>
-                  Archive keeps the registry clean. Cleanup candidates below show where storage reduction can happen later without deleting active business truth.
-                </p>
-              </div>
-              <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "flex-start" }}>
-                <span className="badge badge--neutral">{cleanupReport.totals.archivedSnapshots} archived</span>
-                <span className="badge badge--neutral">{cleanupReport.totals.lockedSnapshots} locked</span>
-              </div>
-            </div>
-            <div style={{ display: "grid", gap: "0.65rem", gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
-              <div className="card" style={{ background: "var(--surface-subtle)", padding: "0.85rem" }}>
-                <p className="metric" style={{ fontSize: "1.4rem" }}>{cleanupReport.totals.rawFileCleanupCandidates}</p>
-                <p className="metric-sub">raw file cleanup candidates</p>
-              </div>
-              <div className="card" style={{ background: "var(--surface-subtle)", padding: "0.85rem" }}>
-                <p className="metric" style={{ fontSize: "1.4rem" }}>{cleanupReport.totals.failedImportCandidates}</p>
-                <p className="metric-sub">failed import logs older than 30 days</p>
-              </div>
-              <div className="card" style={{ background: "var(--surface-subtle)", padding: "0.85rem" }}>
-                <p className="metric" style={{ fontSize: "1.4rem" }}>{cleanupReport.totals.supersedeCandidates}</p>
-                <p className="metric-sub">duplicate source snapshot candidates</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.75rem" }}>
         <button
@@ -542,6 +652,99 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, cleanupReport, 
                   <span>{snapshot.importedFactCount.toLocaleString()} rows imported</span>
                   <span>{snapshot.scenarioRefCount} scenario refs · {snapshot.runRefCount} run refs</span>
                 </div>
+
+                {snapshot.manifest ? (
+                  <div style={{ display: "grid", gap: "0.45rem", marginTop: "0.6rem" }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+                      <span className="badge badge--neutral">
+                        {getSnapshotSourceTypeLabel(snapshot.manifest.sourceType)}
+                      </span>
+                      <span className="badge badge--neutral">
+                        {getSnapshotValidationBasisLabel(snapshot.manifest.validatedVia)}
+                      </span>
+                      <span
+                        className={`badge ${
+                          snapshot.manifest.truthLevel === "strong"
+                            ? "badge--candidate"
+                            : snapshot.manifest.truthLevel === "partial"
+                              ? "badge--risky"
+                              : "badge--rejected"
+                        }`}
+                      >
+                        Truth: {getHistoricalTruthCoverageLabel(snapshot.manifest.truthLevel)}
+                      </span>
+                      <span
+                        className={`badge ${
+                          snapshot.manifest.founderReadiness === "founder_safe"
+                            ? "badge--candidate"
+                            : "badge--risky"
+                        }`}
+                      >
+                        {getSnapshotFounderReadinessLabel(snapshot.manifest.founderReadiness)}
+                      </span>
+                      {snapshot.canonicalGapAudit ? (
+                        <span
+                          className={`badge ${
+                            snapshot.canonicalGapAudit.readiness === "strong"
+                              ? "badge--candidate"
+                              : snapshot.canonicalGapAudit.readiness === "partial"
+                                ? "badge--risky"
+                                : "badge--rejected"
+                          }`}
+                        >
+                          Canonical: {getCanonicalGapStatusLabel(snapshot.canonicalGapAudit.readiness)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="muted" style={{ fontSize: "0.75rem", margin: 0 }}>
+                      {snapshot.manifest.summary}
+                    </p>
+                    {snapshot.truthNotes ? (
+                      <p className="muted" style={{ fontSize: "0.75rem", margin: 0 }}>
+                        Truth notes: {snapshot.truthNotes}
+                      </p>
+                    ) : null}
+                    {snapshot.supersededBySnapshot ? (
+                      <p className="muted" style={{ fontSize: "0.75rem", margin: 0 }}>
+                        Supersedes: {snapshot.supersededBySnapshot.name}
+                      </p>
+                    ) : null}
+                    {snapshot.canonicalGapAudit ? (
+                      <div className="table-wrap" style={{ marginTop: "0.2rem" }}>
+                        <table className="table">
+                          <thead>
+                            <tr>
+                              <th>Canonical Layer</th>
+                              <th>Status</th>
+                              <th>Detail</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {snapshot.canonicalGapAudit.rows.map((row) => (
+                              <tr key={`${snapshot.id}-${row.key}`}>
+                                <td><strong>{row.label}</strong></td>
+                                <td>
+                                  <span
+                                    className={`badge ${
+                                      row.status === "covered"
+                                        ? "badge--candidate"
+                                        : row.status === "partial"
+                                          ? "badge--risky"
+                                          : "badge--rejected"
+                                    }`}
+                                  >
+                                    {getCanonicalGapStatusLabel(row.status)}
+                                  </span>
+                                </td>
+                                <td>{row.detail}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 {/* Progress Stepper */}
                 <div className="snapshot-progress" style={{ "--step-count": steps.length } as React.CSSProperties}>
@@ -745,6 +948,79 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, cleanupReport, 
           })}
         </div>
       )}
+
+      {cleanupReport ? (
+        <div className="card" style={{ marginTop: "1rem" }}>
+          <div style={{ display: "grid", gap: "0.75rem" }}>
+            <div className="snapshot-cleanup-header">
+              <div>
+                <h3 style={{ marginBottom: "0.2rem" }}>Storage Cleanup Policy</h3>
+                <p className="muted" style={{ fontSize: "0.8rem", margin: 0 }}>
+                  Archive keeps the registry clean. Cleanup stays below the registry because it is maintenance, not the primary business-truth workflow.
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "flex-start" }}>
+                <span className="badge badge--neutral">{cleanupReport.totals.archivedSnapshots} archived</span>
+                <span className="badge badge--neutral">{cleanupReport.totals.lockedSnapshots} locked</span>
+                <span className="badge badge--neutral">{cleanupCandidateCount} candidates</span>
+              </div>
+            </div>
+
+            <div className="snapshot-cleanup-grid">
+              <div className="card" style={{ background: "var(--surface-subtle)", padding: "0.85rem" }}>
+                <p className="metric" style={{ fontSize: "1.4rem" }}>{cleanupReport.totals.rawFileCleanupCandidates}</p>
+                <p className="metric-sub">raw file cleanup candidates</p>
+              </div>
+              <div className="card" style={{ background: "var(--surface-subtle)", padding: "0.85rem" }}>
+                <p className="metric" style={{ fontSize: "1.4rem" }}>{cleanupReport.totals.failedImportCandidates}</p>
+                <p className="metric-sub">failed import logs older than 30 days</p>
+              </div>
+              <div className="card" style={{ background: "var(--surface-subtle)", padding: "0.85rem" }}>
+                <p className="metric" style={{ fontSize: "1.4rem" }}>{cleanupReport.totals.supersedeCandidates}</p>
+                <p className="metric-sub">duplicate source snapshot candidates</p>
+              </div>
+            </div>
+
+            {cleanupCandidateCount > 0 ? (
+              <div style={{ display: "grid", gap: "0.65rem" }}>
+                {cleanupSections
+                  .filter((section) => section.count > 0)
+                  .map((section) => {
+                    const isOpen = expandedCleanupSections.has(section.key);
+                    return (
+                      <div className="accordion-section" data-open={isOpen} key={section.key}>
+                        <button
+                          className="accordion-header"
+                          onClick={() => toggleCleanupSection(section.key)}
+                          type="button"
+                        >
+                          <span>{section.title}</span>
+                          <span className="accordion-summary">
+                            {section.count} candidate{section.count === 1 ? "" : "s"} · {section.summary}
+                          </span>
+                          <svg className="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </button>
+                        {isOpen ? (
+                          <div className="accordion-body">
+                            <ul className="issue-list">
+                              {section.rows}
+                            </ul>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+              </div>
+            ) : (
+              <p className="muted" style={{ fontSize: "0.78rem", margin: 0 }}>
+                No cleanup candidates are currently suggested. The archive layer is present, but there is no immediate storage-reduction action to review.
+              </p>
+            )}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

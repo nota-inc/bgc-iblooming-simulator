@@ -720,6 +720,169 @@ function drawListCards(layout: PdfLayout, leftTitle: string, leftItems: string[]
   layout.cursorY -= cardHeight + 18;
 }
 
+function drawSimpleTable(
+  layout: PdfLayout,
+  headers: string[],
+  widths: number[],
+  rows: string[][],
+  emptyMessage: string
+) {
+  const x = layout.marginX;
+  const padding = 7;
+  const headerHeight = 24;
+
+  const drawHeader = () => {
+    layout.ensureSpace(headerHeight);
+    const yTop = layout.cursorY;
+    let cellX = x;
+
+    headers.forEach((header, index) => {
+      layout.drawRect(cellX, yTop, widths[index], headerHeight, {
+        fill: COLORS.heading
+      });
+      layout.drawTextLine(header, cellX + padding, yTop - 16, {
+        font: "F2",
+        size: 8.2,
+        color: [1, 1, 1]
+      });
+      cellX += widths[index];
+    });
+
+    layout.cursorY -= headerHeight;
+  };
+
+  if (rows.length === 0) {
+    layout.ensureSpace(40);
+    layout.drawRect(x, layout.cursorY, layout.contentWidth, 36, {
+      fill: COLORS.panel,
+      stroke: COLORS.border
+    });
+    layout.drawTextLine(emptyMessage, x + 12, layout.cursorY - 23, {
+      size: 9,
+      color: COLORS.muted
+    });
+    layout.cursorY -= 48;
+    return;
+  }
+
+  drawHeader();
+
+  for (const row of rows) {
+    const rowHeight =
+      Math.max(...row.map((cell, index) => layout.measureParagraph(cell, widths[index] - padding * 2, 8, 10))) +
+      padding * 2;
+
+    if (layout.cursorY - rowHeight < layout.bottomMargin) {
+      layout.gap(10);
+      drawHeader();
+    }
+
+    const yTop = layout.cursorY;
+    let cellX = x;
+
+    row.forEach((cell, index) => {
+      layout.drawRect(cellX, yTop, widths[index], rowHeight, {
+        fill: [1, 1, 1],
+        stroke: COLORS.border
+      });
+      layout.drawParagraph(cell, cellX + padding, yTop - 13, widths[index] - padding * 2, {
+        size: 8,
+        color: index === 0 ? COLORS.heading : COLORS.text,
+        font: index === 0 ? "F2" : "F1",
+        lineHeight: 10
+      });
+      cellX += widths[index];
+    });
+
+    layout.cursorY -= rowHeight;
+  }
+
+  layout.gap(16);
+}
+
+function drawHistoricalTruthCoverageTable(layout: PdfLayout, report: SimulationResultExport) {
+  const coverage = report.decisionPack.historicalTruthCoverage;
+  drawSimpleTable(
+    layout,
+    ["Coverage Layer", "Status", "Detail"],
+    [150, 86, layout.contentWidth - 236],
+    coverage
+      ? [
+          ["Overall Coverage", coverage.status, coverage.summary],
+          ...coverage.rows.map((row) => [row.label, row.status, row.detail])
+        ]
+      : [],
+    "No historical truth coverage summary."
+  );
+}
+
+function drawCanonicalGapAuditTable(layout: PdfLayout, report: SimulationResultExport) {
+  const audit = report.decisionPack.canonicalGapAudit;
+  drawSimpleTable(
+    layout,
+    ["Rule Family", "Status", "Detail"],
+    [150, 86, layout.contentWidth - 236],
+    audit
+      ? [
+          ["Overall Readiness", audit.readiness, audit.summary],
+          ...audit.rows.map((row) => [row.label, row.status, row.detail])
+        ]
+      : [],
+    "No canonical fidelity audit."
+  );
+}
+
+function drawRecommendedSetupTable(layout: PdfLayout, report: SimulationResultExport) {
+  const setup = report.decisionPack.recommendedSetup;
+  drawSimpleTable(
+    layout,
+    ["Setup Item", "Value", "Status", "Rationale"],
+    [132, 104, 82, layout.contentWidth - 318],
+    setup
+      ? [
+          ...(report.decisionPack.adoptedBaselineSummary
+            ? [["Current Baseline", report.decisionPack.adoptedBaselineSummary, "Locked", "Current adopted pilot baseline"]]
+            : []),
+          ["Setup Summary", setup.title, "Summary", setup.summary],
+          ...setup.items.map((item) => [item.label, item.value, item.status, item.rationale]),
+          ...setup.warnings.map((warning) => ["Warning", warning, "Note", "Recommended setup warning"])
+        ]
+      : [],
+    "No structured recommended setup."
+  );
+}
+
+function drawDecisionLogTable(layout: PdfLayout, report: SimulationResultExport) {
+  drawSimpleTable(
+    layout,
+    ["Decision Item", "Generated", "Governance", "Owner", "Rationale / Resolution"],
+    [126, 72, 74, 80, layout.contentWidth - 352],
+    report.decisionPack.decisionLog.map((entry) => [
+      entry.title,
+      entry.status,
+      entry.governanceStatus ?? "Draft",
+      entry.owner,
+      entry.resolutionNote ?? entry.rationale
+    ]),
+    "No structured decision log."
+  );
+}
+
+function drawTruthAssumptionTable(layout: PdfLayout, report: SimulationResultExport) {
+  drawSimpleTable(
+    layout,
+    ["Item", "Classification", "Value", "Note"],
+    [128, 110, 104, layout.contentWidth - 342],
+    report.decisionPack.truthAssumptionMatrix.map((item) => [
+      item.label,
+      item.classification,
+      item.value,
+      item.note
+    ]),
+    "No truth vs assumption matrix."
+  );
+}
+
 function drawObjectiveCards(layout: PdfLayout, objectives: SimulationResultExportObjective[]) {
   if (objectives.length === 0) {
     layout.ensureSpace(44);
@@ -976,6 +1139,21 @@ export function renderSimulationResultStyledPdf(report: SimulationResultExport) 
     "Blockers / Rejection Reasons",
     report.decisionPack.rejectedSettings
   );
+
+  drawSectionTitle(layout, "Historical Truth Coverage", "Canonical and derived truth coverage behind this run.");
+  drawHistoricalTruthCoverageTable(layout, report);
+
+  drawSectionTitle(layout, "Canonical Fidelity Audit", "Rule-family audit for where stronger event-native closure is still needed.");
+  drawCanonicalGapAuditTable(layout, report);
+
+  drawSectionTitle(layout, "Recommended Pilot Envelope", "Structured setup recommendation for this run.");
+  drawRecommendedSetupTable(layout, report);
+
+  drawSectionTitle(layout, "Decision Log", "What is fixed by truth, recommended by evidence, or still pending.");
+  drawDecisionLogTable(layout, report);
+
+  drawSectionTitle(layout, "Truth vs Assumption Matrix", "Explicit separation between historical truth, scenario levers, assumptions, and locked boundaries.");
+  drawTruthAssumptionTable(layout, report);
 
   drawSectionTitle(layout, "Strategic Goals");
   drawObjectiveCards(layout, report.decisionPack.strategicObjectives);

@@ -12,20 +12,32 @@ import { authorizeApiRequest } from "@/lib/auth-session";
 import {
   formatCommonMetricValue,
   getCommonMetricLabel,
+  getDecisionGovernanceStatusLabel,
+  getDecisionLogStatusLabel,
   getEvidenceLevelLabel,
+  getHistoricalTruthCoverageLabel,
   getPolicyStatusLabel,
   getRiskSeverityLabel,
   getRunReference,
   getRunStatusLabel,
+  getSetupStatusLabel,
   getSegmentKeyLabel,
-  getSegmentTypeLabel
+  getSegmentTypeLabel,
+  getTruthClassificationLabel
 } from "@/lib/common-language";
 import { summaryMetricDefinitions } from "@/lib/summary-metrics";
 import {
   formatStrategicMetricValue,
+  mergeDecisionLogWithResolutions,
+  readCanonicalGapAudit,
+  readDecisionLog,
+  readDecisionLogResolutions,
   readDecisionPack,
+  readHistoricalTruthCoverage,
   readMilestoneEvaluations,
-  readStrategicObjectives
+  readRecommendedSetup,
+  readStrategicObjectives,
+  readTruthAssumptionMatrix
 } from "@/lib/strategic-objectives";
 
 function buildFilename(source: string) {
@@ -116,6 +128,23 @@ function buildExportReport(run: NonNullable<Awaited<ReturnType<typeof getRunById
 
   const strategicObjectives = readStrategicObjectives(packValue);
   const milestoneEvaluations = readMilestoneEvaluations(packValue);
+  const historicalTruthCoverage = readHistoricalTruthCoverage(packValue);
+  const canonicalGapAudit = readCanonicalGapAudit(packValue);
+  const recommendedSetup = readRecommendedSetup(packValue);
+  const decisionLog = mergeDecisionLogWithResolutions(
+    readDecisionLog(packValue),
+    readDecisionLogResolutions(
+      run.decisionLogResolutions.map((resolution) => ({
+        decision_key: resolution.decisionKey,
+        status: resolution.status.toLowerCase(),
+        owner: resolution.owner ?? "",
+        resolution_note: resolution.resolutionNote ?? null,
+        reviewed_at: resolution.reviewedAt?.toISOString() ?? null,
+        reviewed_by_user_id: resolution.reviewedByUserId ?? null
+      }))
+    )
+  );
+  const truthAssumptionMatrix = readTruthAssumptionMatrix(packValue);
 
   return {
     title: `Simulation Result Export · ${getRunReference(run.id)}`,
@@ -142,6 +171,62 @@ function buildExportReport(run: NonNullable<Awaited<ReturnType<typeof getRunById
       preferredSettings: decisionPack.preferred_settings,
       rejectedSettings: decisionPack.rejected_settings,
       unresolvedQuestions: decisionPack.unresolved_questions,
+      historicalTruthCoverage: historicalTruthCoverage
+        ? {
+            status: getHistoricalTruthCoverageLabel(historicalTruthCoverage.status),
+            summary: historicalTruthCoverage.summary,
+            rows: historicalTruthCoverage.rows.map((row) => ({
+              label: row.label,
+              status: getHistoricalTruthCoverageLabel(row.status),
+              detail: row.detail
+            }))
+          }
+        : null,
+      canonicalGapAudit: canonicalGapAudit
+        ? {
+            readiness: getHistoricalTruthCoverageLabel(canonicalGapAudit.readiness),
+            summary: canonicalGapAudit.summary,
+            rows: canonicalGapAudit.rows.map((row) => ({
+              label: row.label,
+              status: getHistoricalTruthCoverageLabel(row.status),
+              detail: row.detail
+            }))
+          }
+        : null,
+      recommendedSetup: recommendedSetup
+        ? {
+            title: recommendedSetup.title,
+            summary: recommendedSetup.summary,
+            items: recommendedSetup.items.map((item) => ({
+              label: item.label,
+              value: item.value,
+              status: getSetupStatusLabel(item.status),
+              rationale: item.rationale
+            })),
+            warnings: recommendedSetup.warnings
+          }
+        : null,
+      adoptedBaselineSummary:
+        run.scenario.adoptedBaselineRunId === run.id
+          ? `Adopted as current pilot baseline${run.scenario.adoptedBaselineAt ? ` at ${run.scenario.adoptedBaselineAt.toLocaleString("en-US")}` : ""}${run.scenario.adoptedBaselineNote ? ` · ${run.scenario.adoptedBaselineNote}` : ""}`
+          : run.scenario.adoptedBaselineRunId
+            ? `Another run is currently adopted as the pilot baseline for ${run.scenario.name}.`
+            : null,
+      decisionLog: decisionLog.map((entry) => ({
+        title: entry.title,
+        status: getDecisionLogStatusLabel(entry.status),
+        owner: entry.owner,
+        rationale: entry.rationale,
+        governanceStatus: getDecisionGovernanceStatusLabel(entry.governance_status ?? "draft"),
+        resolutionNote: entry.resolution_note ?? null,
+        reviewedAt: entry.reviewed_at ?? null
+      })),
+      truthAssumptionMatrix: truthAssumptionMatrix.map((item) => ({
+        label: item.label,
+        classification: getTruthClassificationLabel(item.classification),
+        value: item.value,
+        note: item.note
+      })),
       strategicObjectives: strategicObjectives.map((objective) => ({
         title: objective.label,
         status: getPolicyStatusLabel(objective.status),

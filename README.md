@@ -4,17 +4,17 @@ Internal decision console for simulating `ALPHA` use and distribution across the
 
 ## Documentation
 
-- [SIMULATOR_GLOSSARY.md](/Users/fabiomaulana/Documents/bgc%20simulator/SIMULATOR_GLOSSARY.md): terms, statuses, parameters, metrics, and current engine behavior
-- [SIMULATOR_GLOSSARY_ID.md](/Users/fabiomaulana/Documents/bgc%20simulator/SIMULATOR_GLOSSARY_ID.md): Indonesian version of the simulator glossary for terms, statuses, parameters, metrics, and current engine behavior
-- [SIMULATOR_MEETING_GLOSSARY_ID.md](/Users/fabiomaulana/Documents/bgc%20simulator/SIMULATOR_MEETING_GLOSSARY_ID.md): Indonesian meeting-friendly glossary for key terms on Snapshots, Run, and Compare pages
-- [SIMULATOR_FLOW.md](/Users/fabiomaulana/Documents/bgc%20simulator/SIMULATOR_FLOW.md): English presentation-friendly flow of the simulator, screen by screen
-- [SIMULATOR_FLOW_ID.md](/Users/fabiomaulana/Documents/bgc%20simulator/SIMULATOR_FLOW_ID.md): Indonesian presentation-friendly flow of the simulator, screen by screen
-- [SIMULATOR_FAITHFUL_DATA_MODEL_SPEC.md](/Users/fabiomaulana/Documents/bgc%20simulator/SIMULATOR_FAITHFUL_DATA_MODEL_SPEC.md): faithful snapshot contract and compatibility guidance for understanding-doc-aligned imports
-- [COMPANY_CASHFLOW_LENS_SPEC.md](/Users/fabiomaulana/Documents/bgc%20simulator/COMPANY_CASHFLOW_LENS_SPEC.md): company cashflow metrics separated from ALPHA policy math
-- [SCENARIO_PARAMETER_GUARDRAIL_MATRIX.md](/Users/fabiomaulana/Documents/bgc%20simulator/SCENARIO_PARAMETER_GUARDRAIL_MATRIX.md): founder-safe scenario parameter rules and locked levers
-- [bgc-alpha-simulator-data-baseline-build-plan-v1.md](/Users/fabiomaulana/Documents/bgc%20simulator/bgc-alpha-simulator-data-baseline-build-plan-v1.md): implementation plan and current progress for canonical ingestion and dataset-driven simulation
-- [bgc-alpha-simulator-calibration-workflow-v1.md](/Users/fabiomaulana/Documents/bgc%20simulator/bgc-alpha-simulator-calibration-workflow-v1.md): calibration workflow and current sample calibration findings
-- [bgc-alpha-simulator-mvp-execution-plan-v1.md](/Users/fabiomaulana/Documents/bgc%20simulator/bgc-alpha-simulator-mvp-execution-plan-v1.md): MVP execution plan with current implementation status notes
+- [SIMULATOR_GLOSSARY.md](./SIMULATOR_GLOSSARY.md): terms, statuses, parameters, metrics, and current engine behavior
+- [SIMULATOR_GLOSSARY_ID.md](./SIMULATOR_GLOSSARY_ID.md): Indonesian version of the simulator glossary for terms, statuses, parameters, metrics, and current engine behavior
+- [SIMULATOR_MEETING_GLOSSARY_ID.md](./SIMULATOR_MEETING_GLOSSARY_ID.md): Indonesian meeting-friendly glossary for key terms on Snapshots, Run, and Compare pages
+- [SIMULATOR_FLOW.md](./SIMULATOR_FLOW.md): English presentation-friendly flow of the simulator, screen by screen
+- [SIMULATOR_FLOW_ID.md](./SIMULATOR_FLOW_ID.md): Indonesian presentation-friendly flow of the simulator, screen by screen
+- [SIMULATOR_FAITHFUL_DATA_MODEL_SPEC.md](./SIMULATOR_FAITHFUL_DATA_MODEL_SPEC.md): faithful snapshot contract and compatibility guidance for understanding-doc-aligned imports
+- [COMPANY_CASHFLOW_LENS_SPEC.md](./COMPANY_CASHFLOW_LENS_SPEC.md): company cashflow metrics separated from ALPHA policy math
+- [SCENARIO_PARAMETER_GUARDRAIL_MATRIX.md](./SCENARIO_PARAMETER_GUARDRAIL_MATRIX.md): founder-safe scenario parameter rules and locked levers
+- [bgc-alpha-simulator-data-baseline-build-plan-v1.md](./bgc-alpha-simulator-data-baseline-build-plan-v1.md): implementation plan and current progress for canonical ingestion and dataset-driven simulation
+- [bgc-alpha-simulator-calibration-workflow-v1.md](./bgc-alpha-simulator-calibration-workflow-v1.md): calibration workflow and current sample calibration findings
+- [bgc-alpha-simulator-mvp-execution-plan-v1.md](./bgc-alpha-simulator-mvp-execution-plan-v1.md): MVP execution plan with current implementation status notes
 
 ## Workspace
 
@@ -36,7 +36,7 @@ This repository now supports the main internal simulator loop:
 - dataset-driven simulation over imported `SnapshotMemberMonthFact` rows
 - persisted results across summary, distribution, treasury, compare, and decision-pack views
 - Result Ref management with pinning and archive filters
-- snapshot storage cleanup policy report for non-destructive cleanup planning
+- snapshot storage cleanup policy report as a secondary maintenance panel below the snapshot registry, with collapsible candidate detail for non-destructive cleanup planning
 - company cashflow lens separated from ALPHA policy outputs in run, treasury, compare, and export surfaces
 - compare workflow with selected-run management, radar quick-scan, and cashflow-first comparison tables
 - founder-facing full simulation report export from run and compare surfaces
@@ -48,15 +48,15 @@ This repository now supports the main internal simulator loop:
 2. Run `pnpm dev:setup`
 3. Run `pnpm dev`
 4. Restart the worker after code changes that add new job handlers
-5. Use the sample CSV at [examples/sample-member-month-facts.csv](/Users/fabiomaulana/Documents/bgc%20simulator/examples/sample-member-month-facts.csv) when testing local imports
+5. Use the sample CSV at [examples/sample-member-month-facts.csv](./examples/sample-member-month-facts.csv) when testing local imports
 
 ## Local Dev
 
 This workspace is prepared for local development with:
 
-- root env file: [/.env](/Users/fabiomaulana/Documents/bgc%20simulator/.env)
-- Next.js env file: [apps/web/.env.local](/Users/fabiomaulana/Documents/bgc%20simulator/apps/web/.env.local)
-- Prisma env file: [packages/db/.env](/Users/fabiomaulana/Documents/bgc%20simulator/packages/db/.env)
+- root env file: `.env`
+- Next.js env file: `apps/web/.env.local`
+- Prisma env file: `packages/db/.env`
 
 The fastest setup path is:
 

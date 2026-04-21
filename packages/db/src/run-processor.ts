@@ -2,7 +2,9 @@ import { resolveBaselineModelRuleset } from "@bgc-alpha/baseline-model";
 import {
   evaluateFounderScenarioGuardrails,
   parseFounderSafeScenarioParameters,
+  scenarioGuardrailMatrix,
   type DecisionPack,
+  type DecisionPackHistoricalTruthCoverage,
   type MilestoneEvaluation,
   type RunFlag,
   type SimulationRunRequest,
@@ -12,7 +14,12 @@ import {
 import { evaluateRecommendation, simulateScenario } from "@bgc-alpha/simulation-core";
 
 import { upsertRunDecisionPack } from "./decision-packs";
-import { listSnapshotMemberMonthFacts, listSnapshotPoolPeriodFacts } from "./snapshots";
+import {
+  getSnapshotTruthCoverage,
+  getSnapshotCanonicalGapAudit,
+  listSnapshotMemberMonthFacts,
+  listSnapshotPoolPeriodFacts
+} from "./snapshots";
 import {
   getRunById,
   markRunFailed,
@@ -27,6 +34,15 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 0,
   style: "currency"
 });
+
+const percentageFormatter = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 2,
+  minimumFractionDigits: 0
+});
+
+const scenarioGuardrailByKey = new Map(
+  scenarioGuardrailMatrix.map((entry) => [entry.parameter_key, entry] as const)
+);
 
 function readMetadataRecord(value: unknown) {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -261,10 +277,282 @@ function buildFlags(run: NonNullable<Awaited<ReturnType<typeof getRunById>>>): R
   }));
 }
 
+function formatPercent(value: number) {
+  return `${percentageFormatter.format(value)}%`;
+}
+
+function formatPlanningHorizon(months: number | null) {
+  return months ? `${months} months` : "snapshot window";
+}
+
+function buildCohortProjectionValue(
+  parameters: ReturnType<typeof parseFounderSafeScenarioParameters>
+) {
+  const cohort = parameters.cohort_assumptions;
+
+  if (
+    cohort.new_members_per_month === 0 &&
+    cohort.monthly_churn_rate_pct === 0 &&
+    cohort.monthly_reactivation_rate_pct === 0
+  ) {
+    return "disabled in founder-safe mode";
+  }
+
+  return [
+    `${cohort.new_members_per_month} new/mo`,
+    `${formatPercent(cohort.monthly_churn_rate_pct)} churn`,
+    `${formatPercent(cohort.monthly_reactivation_rate_pct)} reactivation`
+  ].join(" · ");
+}
+
+function buildMilestoneValue(
+  parameters: ReturnType<typeof parseFounderSafeScenarioParameters>
+) {
+  if (parameters.milestone_schedule.length === 0) {
+    return "none";
+  }
+
+  return `${parameters.milestone_schedule.length} milestone${
+    parameters.milestone_schedule.length === 1 ? "" : "s"
+  }`;
+}
+
+function buildRunRecommendedSetup(
+  parameters: ReturnType<typeof parseFounderSafeScenarioParameters>,
+  summary: SummaryMetrics,
+  recommendation: ReturnType<typeof evaluateRecommendation>,
+  truthCoverage: DecisionPackHistoricalTruthCoverage
+): DecisionPack["recommended_setup"] {
+  const pushItem = (
+    items: DecisionPack["recommended_setup"]["items"],
+    parameterKey: string,
+    label: string,
+    value: string,
+    status: "recommended" | "caution" | "locked"
+  ) => {
+    const guardrail = scenarioGuardrailByKey.get(parameterKey as never);
+
+    items.push({
+      parameter_key: parameterKey,
+      label,
+      value,
+      status,
+      rationale:
+        guardrail?.business_rationale ??
+        "This setup item is included to keep the recommended pilot envelope explicit."
+    });
+  };
+
+  const items: DecisionPack["recommended_setup"]["items"] = [];
+
+  pushItem(items, "k_pc", "k_pc", String(parameters.k_pc), "recommended");
+  pushItem(items, "k_sp", "k_sp", String(parameters.k_sp), "recommended");
+  pushItem(items, "cap_user_monthly", "User monthly cap", parameters.cap_user_monthly, "recommended");
+  pushItem(items, "cap_group_monthly", "Group monthly cap", parameters.cap_group_monthly, "recommended");
+  pushItem(items, "sink_target", "Sink target", String(parameters.sink_target), "caution");
+  pushItem(items, "cashout_mode", "Cash-out mode", parameters.cashout_mode, "caution");
+  pushItem(items, "cashout_min_usd", "Cash-out minimum", currencyFormatter.format(parameters.cashout_min_usd), "caution");
+  pushItem(items, "cashout_fee_bps", "Cash-out fee", `${parameters.cashout_fee_bps} bps`, "caution");
+  pushItem(items, "cashout_windows_per_year", "Cash-out windows / year", String(parameters.cashout_windows_per_year), "caution");
+  pushItem(items, "cashout_window_days", "Cash-out window days", String(parameters.cashout_window_days), "caution");
+  pushItem(items, "projection_horizon_months", "Projection horizon", formatPlanningHorizon(parameters.projection_horizon_months), "caution");
+  pushItem(items, "milestone_schedule", "Milestone schedule", buildMilestoneValue(parameters), "caution");
+  pushItem(items, "reward_global_factor", "Global reward factor", String(parameters.reward_global_factor), "locked");
+  pushItem(items, "reward_pool_factor", "Pool reward factor", String(parameters.reward_pool_factor), "locked");
+  pushItem(items, "cohort_assumptions", "Cohort projection", buildCohortProjectionValue(parameters), "locked");
+
+  const warnings: string[] = [];
+
+  if (truthCoverage.status !== "strong") {
+    warnings.push("Historical truth coverage is not yet fully strong, so recommendation wording should stay calibrated.");
+  }
+
+  if (recommendation.policy_status !== "candidate") {
+    warnings.push("This pilot envelope is still under review and should not be treated as the final default.");
+  }
+
+  if (summary.payout_inflow_ratio >= 1) {
+    warnings.push("Treasury pressure is at or above retained revenue support and still needs founder review.");
+  }
+
+  return {
+    title: "Recommended Pilot Envelope",
+    summary:
+      recommendation.policy_status === "candidate"
+        ? "This run provides a founder-facing pilot envelope that stays explicit about which levers are policy choices and which truths remain fixed."
+        : "This run exposes a draft pilot envelope, but the settings still need caution before they can be treated as the recommended default.",
+    items,
+    warnings
+  };
+}
+
+function buildRunDecisionLog(
+  run: NonNullable<Awaited<ReturnType<typeof getRunById>>>,
+  summary: SummaryMetrics,
+  recommendation: ReturnType<typeof evaluateRecommendation>,
+  strategicObjectives: StrategicObjectiveScorecard[],
+  milestoneEvaluations: MilestoneEvaluation[],
+  truthCoverage: DecisionPackHistoricalTruthCoverage
+): DecisionPack["decision_log"] {
+  const proxyObjectives = strategicObjectives.filter((objective) => objective.evidence_level !== "direct");
+  const riskyMilestones = milestoneEvaluations.filter((milestone) => milestone.policy_status !== "candidate");
+  const log: DecisionPack["decision_log"] = [
+    {
+      key: "understanding_doc_truth",
+      title: "Historical business truth stays fixed",
+      status: "fixed_truth",
+      owner: "Understanding Doc",
+      rationale: `Run ${run.scenario.name} is evaluated on top of ${run.snapshot.name}; scenario levers do not rewrite imported business truth.`
+    }
+  ];
+
+  log.push({
+    key: "pilot_policy_envelope",
+    title: "Pilot policy envelope from this run",
+    status:
+      recommendation.policy_status === "candidate"
+        ? "recommended"
+        : recommendation.policy_status === "risky"
+          ? "pending_founder"
+          : "blocked",
+    owner: recommendation.policy_status === "candidate" ? "Founder" : "Founder",
+    rationale:
+      recommendation.policy_status === "candidate"
+        ? `Treasury pressure is ${summary.payout_inflow_ratio.toFixed(2)}x with net treasury delta ${currencyFormatter.format(summary.company_net_treasury_delta_total)}.`
+        : recommendation.policy_status === "risky"
+          ? "This run is still usable for discussion, but founder review is required before it can become the pilot default."
+          : "This run fails core treasury or cashflow thresholds and should not be promoted as the pilot default."
+  });
+
+  if (truthCoverage.status !== "strong") {
+    log.push({
+      key: "truth_coverage_gap",
+      title: "Historical truth coverage still needs strengthening",
+      status: "blocked",
+      owner: "Data / Ops",
+      rationale: truthCoverage.summary
+    });
+  }
+
+  if (proxyObjectives.length > 0) {
+    log.push({
+      key: "strategic_evidence_gap",
+      title: "Some strategic claims still rely on proxy or checklist evidence",
+      status: "blocked",
+      owner: "Data / Legal / Ops",
+      rationale: proxyObjectives
+        .map((objective) => `${objective.label} is ${objective.evidence_level}`)
+        .join("; ")
+    });
+  }
+
+  if (riskyMilestones.length > 0) {
+    log.push({
+      key: "milestone_governance_review",
+      title: "Milestone promotion still needs founder review",
+      status: "pending_founder",
+      owner: "Founder",
+      rationale: riskyMilestones
+        .map((milestone) => `${milestone.label}: ${milestone.reasons[0] ?? milestone.policy_status}`)
+        .join("; ")
+    });
+  }
+
+  return log;
+}
+
+function buildRunTruthAssumptionMatrix(
+  run: NonNullable<Awaited<ReturnType<typeof getRunById>>>,
+  parameters: ReturnType<typeof parseFounderSafeScenarioParameters>,
+  truthCoverage: DecisionPackHistoricalTruthCoverage
+): DecisionPack["truth_assumption_matrix"] {
+  return [
+    {
+      key: "snapshot_truth",
+      label: "Approved snapshot truth",
+      value: run.snapshot.name,
+      classification: "historical_truth",
+      note: "Imported recognized revenue support and reward distributions remain fixed business truth."
+    },
+    {
+      key: "truth_coverage",
+      label: "Historical truth coverage",
+      value: truthCoverage.status,
+      classification: "derived_assessment",
+      note: truthCoverage.summary
+    },
+    {
+      key: "k_pc",
+      label: "k_pc",
+      value: String(parameters.k_pc),
+      classification: "scenario_lever",
+      note: "Allowed ALPHA conversion overlay on top of PC truth."
+    },
+    {
+      key: "k_sp",
+      label: "k_sp",
+      value: String(parameters.k_sp),
+      classification: "scenario_lever",
+      note: "Allowed ALPHA conversion overlay on top of SP/LTS truth."
+    },
+    {
+      key: "caps",
+      label: "Monthly caps",
+      value: `user ${parameters.cap_user_monthly} · group ${parameters.cap_group_monthly}`,
+      classification: "scenario_lever",
+      note: "Monthly issuance caps are policy levers and do not rewrite historical events."
+    },
+    {
+      key: "cashout_policy",
+      label: "Cash-out policy",
+      value: `${parameters.cashout_mode} · ${currencyFormatter.format(parameters.cashout_min_usd)} min · ${parameters.cashout_fee_bps} bps`,
+      classification: "scenario_assumption",
+      note: "Cash-out release policy is an ALPHA overlay assumption, not historical business truth."
+    },
+    {
+      key: "sink_target",
+      label: "Sink target",
+      value: String(parameters.sink_target),
+      classification: "scenario_assumption",
+      note: "Sink posture is a scenario assumption about desired internal use."
+    },
+    {
+      key: "projection_horizon",
+      label: "Projection horizon",
+      value: formatPlanningHorizon(parameters.projection_horizon_months),
+      classification: "scenario_assumption",
+      note: "Any projection beyond the observed snapshot window must be read as an assumption."
+    },
+    {
+      key: "milestone_schedule",
+      label: "Milestone schedule",
+      value: buildMilestoneValue(parameters),
+      classification: "scenario_assumption",
+      note: "Time-staged policy changes are governance assumptions layered on top of truth."
+    },
+    {
+      key: "reward_factor_lock",
+      label: "Global / pool reward factors",
+      value: "locked to neutral baseline",
+      classification: "locked_boundary",
+      note: "Generic reward multipliers stay locked so named understanding-doc reward semantics are not distorted."
+    },
+    {
+      key: "cohort_projection",
+      label: "Synthetic cohort projection",
+      value: buildCohortProjectionValue(parameters),
+      classification: "locked_boundary",
+      note: "Founder-safe mode keeps synthetic cohort projections outside the faithful business-truth envelope."
+    }
+  ];
+}
+
 function buildDecisionPack(
   run: NonNullable<Awaited<ReturnType<typeof getRunById>>>,
   strategicObjectives: StrategicObjectiveScorecard[],
-  milestoneEvaluations: MilestoneEvaluation[]
+  milestoneEvaluations: MilestoneEvaluation[],
+  truthCoverage: DecisionPackHistoricalTruthCoverage,
+  canonicalGapAudit: DecisionPack["canonical_gap_audit"]
 ): DecisionPack {
   const summary = buildSummary(run);
   const flags = buildFlags(run);
@@ -286,6 +574,21 @@ function buildDecisionPack(
   const proxyObjectives = strategicObjectives.filter((objective) => objective.evidence_level !== "direct");
   const failedMilestones = milestoneEvaluations.filter((milestone) => milestone.policy_status === "rejected");
   const riskyMilestones = milestoneEvaluations.filter((milestone) => milestone.policy_status === "risky");
+  const recommendedSetup = buildRunRecommendedSetup(
+    parameters,
+    summary,
+    recommendation,
+    truthCoverage
+  );
+  const decisionLog = buildRunDecisionLog(
+    run,
+    summary,
+    recommendation,
+    strategicObjectives,
+    milestoneEvaluations,
+    truthCoverage
+  );
+  const truthAssumptionMatrix = buildRunTruthAssumptionMatrix(run, parameters, truthCoverage);
 
   return {
     title: `${run.scenario.name} Decision Pack`,
@@ -360,7 +663,12 @@ function buildDecisionPack(
       )
     ],
     strategic_objectives: strategicObjectives,
-    milestone_evaluations: milestoneEvaluations
+    milestone_evaluations: milestoneEvaluations,
+    historical_truth_coverage: truthCoverage,
+    recommended_setup: recommendedSetup,
+    decision_log: decisionLog,
+    truth_assumption_matrix: truthAssumptionMatrix,
+    canonical_gap_audit: canonicalGapAudit
   };
 }
 
@@ -375,7 +683,25 @@ export async function generateDecisionPackForRun(
     throw new Error(`Run ${runId} was not found.`);
   }
 
-  const pack = buildDecisionPack(run, strategicObjectives, milestoneEvaluations);
+  const truthCoverage =
+    (await getSnapshotTruthCoverage(run.snapshotId)) ?? {
+      status: "weak",
+      summary: "Historical truth coverage could not be read for this snapshot.",
+      rows: []
+    };
+  const canonicalGapAudit =
+    (await getSnapshotCanonicalGapAudit(run.snapshotId)) ?? {
+      readiness: "weak",
+      summary: "Canonical fidelity audit could not be read for this snapshot.",
+      rows: []
+    };
+  const pack = buildDecisionPack(
+    run,
+    strategicObjectives,
+    milestoneEvaluations,
+    truthCoverage,
+    canonicalGapAudit
+  );
   const savedPack = await upsertRunDecisionPack({
     runId,
     title: pack.title,

@@ -84,6 +84,11 @@ const runInclude = {
       }
     ]
   },
+  decisionLogResolutions: {
+    orderBy: {
+      updatedAt: "desc" as const
+    }
+  },
   decisionPacks: {
     orderBy: {
       createdAt: "desc" as const
@@ -99,7 +104,7 @@ const duplicateBlockingStatuses = [
 
 function buildRunArchiveWhere(options: RunListOptions = {}) {
   return options.includeArchived
-    ? undefined
+    ? {}
     : {
         archivedAt: null
       };

@@ -932,6 +932,19 @@ button, input, select, textarea { font: inherit; }
   gap: 0.35rem;
 }
 
+.snapshot-cleanup-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.snapshot-cleanup-grid {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .snapshot-card-actions {
   display: flex;
   gap: 0.4rem;
@@ -1681,6 +1694,10 @@ button, input, select, textarea { font: inherit; }
     grid-template-columns: 1fr;
   }
 
+  .snapshot-cleanup-grid {
+    grid-template-columns: 1fr;
+  }
+
   .snapshot-card-list {
     grid-template-columns: 1fr;
   }
@@ -2094,6 +2111,36 @@ button, input, select, textarea { font: inherit; }
   line-height: 1.45;
 }
 
+.decision-governance-control {
+  display: grid;
+  gap: 0.5rem;
+  min-width: min(100%, 28rem);
+}
+
+.decision-governance-control__row {
+  display: grid;
+  grid-template-columns: minmax(0, 12rem) minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+.decision-governance-control select,
+.decision-governance-control input {
+  width: 100%;
+  min-height: 2.35rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  padding: 0.55rem 0.75rem;
+}
+
+.decision-governance-control select:focus,
+.decision-governance-control input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
 @media (max-width: 760px) {
   .compare-selected-bar,
   .scenario-selector-header {
@@ -2112,5 +2159,9 @@ button, input, select, textarea { font: inherit; }
   .compare-run-list {
     grid-template-columns: 1fr;
     max-height: 360px;
+  }
+
+  .decision-governance-control__row {
+    grid-template-columns: 1fr;
   }
 }

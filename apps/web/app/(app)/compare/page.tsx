@@ -1,5 +1,7 @@
+import { resolveBaselineModelRuleset } from "@bgc-alpha/baseline-model";
 import { listCompletedRuns, processSimulationRun } from "@bgc-alpha/db";
 import { hasDatabaseUrl } from "@bgc-alpha/db/database-url";
+import { parseFounderSafeScenarioParameters } from "@bgc-alpha/schemas";
 import { PageHeader } from "@bgc-alpha/ui";
 
 import { CompareConsole } from "@/components/compare-console";
@@ -7,8 +9,15 @@ import { requirePageUser } from "@/lib/auth-session";
 import { compareMetricKeys, compareMetricOptimization } from "@/lib/compare-config";
 import {
   formatStrategicMetricValue,
+  mergeDecisionLogWithResolutions,
+  readCanonicalGapAudit,
+  readDecisionLog,
+  readDecisionLogResolutions,
+  readHistoricalTruthCoverage,
   readMilestoneEvaluations,
+  readRecommendedSetup,
   readStrategicObjectives,
+  readTruthAssumptionMatrix,
   strategicObjectiveLabels,
   strategicObjectiveOrder
 } from "@/lib/strategic-objectives";
@@ -30,8 +39,17 @@ export default async function ComparePage() {
   // Pre-compute extras on the server (these depend on server-only JSON parsing)
   const runExtras = runs.map((run) => {
     const recJson = run.decisionPacks[0]?.recommendationJson;
+    const baselineModel = resolveBaselineModelRuleset(
+      run.modelVersion.rulesetJson,
+      run.modelVersion.versionName
+    );
+    const parameters = parseFounderSafeScenarioParameters(run.scenario.parameterJson, {
+      reward_global_factor: baselineModel.defaults.reward_global_factor,
+      reward_pool_factor: baselineModel.defaults.reward_pool_factor
+    });
     const strategicObjectives = readStrategicObjectives(recJson).map((obj) => ({
       objective_key: obj.objective_key,
+      label: obj.label,
       status: obj.status,
       score: obj.score,
       evidence_level: obj.evidence_level,
@@ -58,7 +76,42 @@ export default async function ComparePage() {
     const verdict = recJson
       ? (recJson as Record<string, unknown>).policy_status as string ?? "pending"
       : "pending";
-    return { runId: run.id, verdict, strategicObjectives, milestoneEvaluations };
+    return {
+      runId: run.id,
+      verdict,
+      parameters: {
+        ...parameters,
+        milestone_count: parameters.milestone_schedule.length,
+        cohort_projection_label:
+          parameters.cohort_assumptions.new_members_per_month === 0 &&
+          parameters.cohort_assumptions.monthly_churn_rate_pct === 0 &&
+          parameters.cohort_assumptions.monthly_reactivation_rate_pct === 0
+            ? "disabled in founder-safe mode"
+            : `${parameters.cohort_assumptions.new_members_per_month} new/mo · ${parameters.cohort_assumptions.monthly_churn_rate_pct}% churn · ${parameters.cohort_assumptions.monthly_reactivation_rate_pct}% reactivation`
+      },
+      strategicObjectives,
+      milestoneEvaluations,
+      historicalTruthCoverage: readHistoricalTruthCoverage(recJson),
+      recommendedSetup: readRecommendedSetup(recJson),
+      decisionLog: mergeDecisionLogWithResolutions(
+        readDecisionLog(recJson),
+        readDecisionLogResolutions(
+          run.decisionLogResolutions.map((resolution) => ({
+            decision_key: resolution.decisionKey,
+            status: resolution.status.toLowerCase(),
+            owner: resolution.owner ?? "",
+            resolution_note: resolution.resolutionNote ?? null,
+            reviewed_at: resolution.reviewedAt?.toISOString() ?? null,
+            reviewed_by_user_id: resolution.reviewedByUserId ?? null
+          }))
+        )
+      ),
+      truthAssumptionMatrix: readTruthAssumptionMatrix(recJson),
+      canonicalGapAudit: readCanonicalGapAudit(recJson),
+      adoptedBaselineRunId: run.scenario.adoptedBaselineRunId ?? null,
+      adoptedBaselineAt: run.scenario.adoptedBaselineAt?.toISOString() ?? null,
+      adoptedBaselineNote: run.scenario.adoptedBaselineNote ?? null
+    };
   });
 
   // Serialize runs for client component (only plain data, no functions)
