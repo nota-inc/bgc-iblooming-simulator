@@ -7,26 +7,63 @@ import { hasDatabaseUrl } from "@bgc-alpha/db/database-url";
 import { parseFounderSafeScenarioParameters } from "@bgc-alpha/schemas";
 import { Card, PageHeader } from "@bgc-alpha/ui";
 
+import {
+  DecisionLogGovernanceControl,
+  RecommendedBaselineControls
+} from "@/components/decision-pack-governance";
 import { RunStatusRefresh } from "@/components/run-status-refresh";
 import { requirePageUser } from "@/lib/auth-session";
 import {
+  getCanonicalGapStatusLabel,
   formatCommonMetricValue,
+  getDecisionGovernanceStatusLabel,
+  getDecisionLogStatusLabel,
   formatPlanningHorizonLabel,
   getEvidenceLevelLabel,
+  getHistoricalTruthCoverageLabel,
   getPolicyStatusLabel,
   getRunReference,
+  getSetupStatusLabel,
+  getTruthClassificationLabel
 } from "@/lib/common-language";
 import {
   formatStrategicMetricValue,
+  mergeDecisionLogWithResolutions,
+  readCanonicalGapAudit,
+  readDecisionLog,
+  readDecisionLogResolutions,
   readMilestoneEvaluations,
   readDecisionPack,
-  readStrategicObjectives
+  readHistoricalTruthCoverage,
+  readRecommendedSetup,
+  readStrategicObjectives,
+  readTruthAssumptionMatrix
 } from "@/lib/strategic-objectives";
 
 function getVerdictStatus(status: string) {
   if (status === "candidate" || status === "approved") return "candidate";
   if (status === "risky" || status === "caution") return "risky";
   return "rejected";
+}
+
+function getCoverageBadge(status: string) {
+  if (status === "strong" || status === "available") return "badge--candidate";
+  if (status === "partial") return "badge--risky";
+  return "badge--rejected";
+}
+
+function getDecisionLogBadge(status: string) {
+  if (status === "fixed_truth") return "badge--info";
+  if (status === "recommended") return "badge--candidate";
+  if (status === "pending_founder") return "badge--risky";
+  return "badge--rejected";
+}
+
+function getTruthClassificationBadge(classification: string) {
+  if (classification === "historical_truth") return "badge--candidate";
+  if (classification === "scenario_assumption") return "badge--risky";
+  if (classification === "locked_boundary") return "badge--neutral";
+  return "badge--info";
 }
 
 const cashflowBasisMetricKeys = [
@@ -81,6 +118,23 @@ export default async function DecisionPackPage({
   const decisionPack = readDecisionPack(decisionPackRecord?.recommendationJson);
   const strategicObjectives = readStrategicObjectives(decisionPackRecord?.recommendationJson);
   const milestoneEvaluations = readMilestoneEvaluations(decisionPackRecord?.recommendationJson);
+  const historicalTruthCoverage = readHistoricalTruthCoverage(decisionPackRecord?.recommendationJson);
+  const canonicalGapAudit = readCanonicalGapAudit(decisionPackRecord?.recommendationJson);
+  const recommendedSetup = readRecommendedSetup(decisionPackRecord?.recommendationJson);
+  const decisionLog = mergeDecisionLogWithResolutions(
+    readDecisionLog(decisionPackRecord?.recommendationJson),
+    readDecisionLogResolutions(
+      run.decisionLogResolutions.map((resolution) => ({
+        decision_key: resolution.decisionKey,
+        status: resolution.status.toLowerCase(),
+        owner: resolution.owner ?? "",
+        resolution_note: resolution.resolutionNote ?? null,
+        reviewed_at: resolution.reviewedAt?.toISOString() ?? null,
+        reviewed_by_user_id: resolution.reviewedByUserId ?? null
+      }))
+    )
+  );
+  const truthAssumptionMatrix = readTruthAssumptionMatrix(decisionPackRecord?.recommendationJson);
   const scenarioParameters = parseFounderSafeScenarioParameters(run.scenario.parameterJson, {
     reward_global_factor: baselineModel.defaults.reward_global_factor,
     reward_pool_factor: baselineModel.defaults.reward_pool_factor
@@ -92,6 +146,9 @@ export default async function DecisionPackPage({
     key,
     value: summaryByKey.get(key) ?? 0
   }));
+  const canWriteScenarios = user.capabilities.includes("scenarios.write");
+  const canWriteRuns = user.capabilities.includes("runs.write");
+  const isAdoptedBaseline = run.scenario.adoptedBaselineRunId === run.id;
   const refreshActive = run.status === "QUEUED" || run.status === "RUNNING" || !decisionPack;
   const inlineResumeEnabled = Boolean(process.env.VERCEL) && user.capabilities.includes("runs.write");
 
@@ -164,6 +221,249 @@ export default async function DecisionPackPage({
                   </div>
                 ))}
               </div>
+            </Card>
+
+            <Card className="span-12" title="Historical Truth Coverage">
+              <p className="card-intro">
+                Canonical and derived coverage behind this run. This keeps scenario recommendations tied to actual stored business evidence.
+              </p>
+              {historicalTruthCoverage ? (
+                <>
+                  <div className="decision-summary">
+                    <div className="decision-summary__verdict">
+                      <span className={`badge ${getCoverageBadge(historicalTruthCoverage.status)}`}>
+                        {getHistoricalTruthCoverageLabel(historicalTruthCoverage.status)}
+                      </span>
+                      <p style={{ marginTop: "0.75rem" }}>{historicalTruthCoverage.summary}</p>
+                    </div>
+                  </div>
+                  <div className="table-wrap" style={{ marginTop: "1rem" }}>
+                    <table className="table">
+                      <thead><tr><th>Coverage Layer</th><th>Status</th><th>Detail</th></tr></thead>
+                      <tbody>
+                        {historicalTruthCoverage.rows.map((row) => (
+                          <tr key={row.key}>
+                            <td><strong>{row.label}</strong></td>
+                            <td>
+                              <span className={`badge ${getCoverageBadge(row.status)}`}>
+                                {getHistoricalTruthCoverageLabel(row.status)}
+                              </span>
+                            </td>
+                            <td>{row.detail}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : (
+                <p className="muted">No historical truth coverage summary recorded yet.</p>
+              )}
+            </Card>
+
+            <Card className="span-12" title="Recommended Pilot Envelope">
+              <p className="card-intro">
+                Structured recommended setup for this run. Historical truth stays fixed; only scenario levers and assumptions are proposed here.
+              </p>
+              {recommendedSetup ? (
+                <>
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: "0.75rem",
+                      gridTemplateColumns: "minmax(0, 1fr) minmax(18rem, 24rem)",
+                      marginBottom: "1rem"
+                    }}
+                  >
+                    <div className="decision-summary">
+                      <div className="decision-summary__verdict">
+                        <span className="badge badge--candidate">{recommendedSetup.title}</span>
+                        <p style={{ marginTop: "0.75rem" }}>{recommendedSetup.summary}</p>
+                        <p className="muted" style={{ marginTop: "0.5rem" }}>
+                          {isAdoptedBaseline
+                            ? `This run is the current adopted pilot baseline for ${run.scenario.name}.`
+                            : run.scenario.adoptedBaselineRunId
+                              ? `Another run is currently adopted as the pilot baseline for ${run.scenario.name}.`
+                              : `No adopted pilot baseline is locked yet for ${run.scenario.name}.`}
+                        </p>
+                        {run.scenario.adoptedBaselineAt ? (
+                          <p className="muted" style={{ marginTop: "0.25rem" }}>
+                            Adopted at {run.scenario.adoptedBaselineAt.toLocaleString("en-US")}
+                            {run.scenario.adoptedBaselineNote ? ` · ${run.scenario.adoptedBaselineNote}` : ""}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                    <Card title="Pilot Baseline Lock">
+                      <p className="card-intro">
+                        Promote this recommendation from “best current run” into the current pilot baseline for the scenario.
+                      </p>
+                      <RecommendedBaselineControls
+                        canWrite={canWriteScenarios}
+                        isAdoptedBaseline={isAdoptedBaseline}
+                        runId={run.id}
+                        scenarioId={run.scenario.id}
+                      />
+                    </Card>
+                  </div>
+                  <div className="table-wrap" style={{ marginTop: "1rem" }}>
+                    <table className="table">
+                      <thead><tr><th>Setup Item</th><th>Value</th><th>Status</th><th>Rationale</th></tr></thead>
+                      <tbody>
+                        {recommendedSetup.items.map((item) => (
+                          <tr key={item.parameter_key}>
+                            <td><strong>{item.label}</strong></td>
+                            <td>{item.value}</td>
+                            <td>
+                              <span className={`badge ${item.status === "recommended" ? "badge--candidate" : item.status === "caution" ? "badge--risky" : "badge--neutral"}`}>
+                                {getSetupStatusLabel(item.status)}
+                              </span>
+                            </td>
+                            <td>{item.rationale}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {recommendedSetup.warnings.length > 0 ? (
+                    <div style={{ marginTop: "1rem" }}>
+                      <h4 style={{ marginBottom: "0.5rem" }}>Warnings</h4>
+                      <ul className="issue-list">
+                        {recommendedSetup.warnings.map((warning) => (
+                          <li key={warning}>{warning}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <p className="muted">No structured recommended setup recorded yet.</p>
+              )}
+            </Card>
+
+            <Card className="span-12" title="Canonical Fidelity Audit">
+              <p className="card-intro">
+                Fidelity audit for rule families that still need stronger canonical/event-native closure before outputs are treated as final lock inputs.
+              </p>
+              {canonicalGapAudit ? (
+                <>
+                  <div className="decision-summary">
+                    <div className="decision-summary__verdict">
+                      <span className={`badge ${getCoverageBadge(canonicalGapAudit.readiness)}`}>
+                        {getHistoricalTruthCoverageLabel(canonicalGapAudit.readiness)}
+                      </span>
+                      <p style={{ marginTop: "0.75rem" }}>{canonicalGapAudit.summary}</p>
+                    </div>
+                  </div>
+                  <div className="table-wrap" style={{ marginTop: "1rem" }}>
+                    <table className="table">
+                      <thead><tr><th>Rule Family</th><th>Status</th><th>Detail</th></tr></thead>
+                      <tbody>
+                        {canonicalGapAudit.rows.map((row) => (
+                          <tr key={row.key}>
+                            <td><strong>{row.label}</strong></td>
+                            <td>
+                              <span className={`badge ${getCoverageBadge(row.status)}`}>
+                                {getCanonicalGapStatusLabel(row.status)}
+                              </span>
+                            </td>
+                            <td>{row.detail}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : (
+                <p className="muted">No canonical fidelity audit recorded yet.</p>
+              )}
+            </Card>
+
+            <Card className="span-12" title="Decision Log">
+              <p className="card-intro">
+                Clear split between what is fixed by truth, what is recommended by current evidence, and what still needs founder or external follow-up.
+              </p>
+              {decisionLog.length === 0 ? (
+                <p className="muted">No structured decision log recorded yet.</p>
+              ) : (
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead><tr><th>Decision Item</th><th>Generated Status</th><th>Governance State</th><th>Owner</th><th>Rationale / Resolution</th></tr></thead>
+                    <tbody>
+                      {decisionLog.map((entry) => (
+                        <tr key={entry.key}>
+                          <td><strong>{entry.title}</strong></td>
+                          <td>
+                            <span className={`badge ${getDecisionLogBadge(entry.status)}`}>
+                              {getDecisionLogStatusLabel(entry.status)}
+                            </span>
+                          </td>
+                          <td>
+                            <div style={{ display: "grid", gap: "0.45rem" }}>
+                              <span className={`badge ${entry.governance_status === "accepted" ? "badge--candidate" : entry.governance_status === "rejected" ? "badge--rejected" : entry.governance_status === "deferred" ? "badge--risky" : "badge--neutral"}`}>
+                                {getDecisionGovernanceStatusLabel(entry.governance_status ?? "draft")}
+                              </span>
+                              <DecisionLogGovernanceControl
+                                canWrite={canWriteRuns}
+                                decisionKey={entry.key}
+                                initialOwner={entry.governance_owner}
+                                initialResolutionNote={entry.resolution_note}
+                                initialStatus={entry.governance_status}
+                                runId={run.id}
+                              />
+                            </div>
+                          </td>
+                          <td>{entry.governance_owner}</td>
+                          <td>
+                            <div style={{ display: "grid", gap: "0.35rem" }}>
+                              <span>{entry.rationale}</span>
+                              {entry.resolution_note ? (
+                                <span className="muted">
+                                  Resolution note: {entry.resolution_note}
+                                </span>
+                              ) : null}
+                              {entry.reviewed_at ? (
+                                <span className="muted">
+                                  Last reviewed: {new Date(entry.reviewed_at).toLocaleString("en-US")}
+                                </span>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
+
+            <Card className="span-12" title="Truth vs Assumption Matrix">
+              <p className="card-intro">
+                This matrix keeps historical truth, scenario levers, conditional assumptions, locked boundaries, and derived assessments visibly separate.
+              </p>
+              {truthAssumptionMatrix.length === 0 ? (
+                <p className="muted">No truth vs assumption matrix recorded yet.</p>
+              ) : (
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead><tr><th>Item</th><th>Classification</th><th>Value</th><th>Note</th></tr></thead>
+                    <tbody>
+                      {truthAssumptionMatrix.map((item) => (
+                        <tr key={item.key}>
+                          <td><strong>{item.label}</strong></td>
+                          <td>
+                            <span className={`badge ${getTruthClassificationBadge(item.classification)}`}>
+                              {getTruthClassificationLabel(item.classification)}
+                            </span>
+                          </td>
+                          <td>{item.value}</td>
+                          <td>{item.note}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </Card>
 
             {/* Strategic Goals */}

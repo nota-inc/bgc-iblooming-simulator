@@ -47,6 +47,14 @@ enum ExportStatus {
   FAILED
 }
 
+enum DecisionResolutionStatus {
+  DRAFT
+  PROPOSED
+  ACCEPTED
+  REJECTED
+  DEFERRED
+}
+
 enum FactDataLayer {
   DERIVED_COMPATIBILITY
 }
@@ -221,6 +229,10 @@ model DatasetSnapshot {
   name              String
   sourceSystems     Json
   canonicalSourceSnapshotKey String?
+  sourceType        String                    @default("compatibility_csv")
+  validatedVia      String                    @default("monthly_facts")
+  truthNotes        String?
+  supersededBySnapshotId String?
   dateFrom          DateTime
   dateTo            DateTime
   fileUri           String
@@ -253,10 +265,13 @@ model DatasetSnapshot {
   poolPeriodFacts   SnapshotPoolPeriodFact[]
   scenarios         Scenario[]
   runs              SimulationRun[]
+  supersededBySnapshot DatasetSnapshot?       @relation("SnapshotSupersession", fields: [supersededBySnapshotId], references: [id], onDelete: SetNull)
+  supersedesSnapshots DatasetSnapshot[]       @relation("SnapshotSupersession")
 
   @@index([validationStatus, createdAt(sort: Desc)])
   @@index([dateFrom, dateTo])
   @@index([archivedAt, createdAt(sort: Desc)])
+  @@index([supersededBySnapshotId])
 }
 
 model SnapshotValidationIssue {
@@ -688,15 +703,22 @@ model Scenario {
   archivedAt       DateTime?
   archivedByUserId String?
   archiveReason    String?
+  adoptedBaselineRunId String?
+  adoptedBaselineJson Json?
+  adoptedBaselineAt DateTime?
+  adoptedBaselineByUserId String?
+  adoptedBaselineNote String?
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
   snapshotDefault  DatasetSnapshot?     @relation(fields: [snapshotIdDefault], references: [id])
   modelVersion     BaselineModelVersion @relation(fields: [modelVersionId], references: [id], onDelete: Restrict)
   runs             SimulationRun[]
+  adoptedBaselineRun SimulationRun?     @relation("ScenarioAdoptedBaseline", fields: [adoptedBaselineRunId], references: [id], onDelete: SetNull)
 
   @@index([modelVersionId, createdAt(sort: Desc)])
   @@index([snapshotIdDefault])
   @@index([archivedAt, updatedAt(sort: Desc)])
+  @@index([adoptedBaselineRunId])
 }
 
 model SimulationRun {
@@ -724,6 +746,8 @@ model SimulationRun {
   segmentMetrics  RunSegmentMetric[]
   flags           RunFlag[]
   decisionPacks   DecisionPack[]
+  decisionLogResolutions RunDecisionLogResolution[]
+  adoptedByScenarios Scenario[]         @relation("ScenarioAdoptedBaseline")
 
   @@index([status, createdAt(sort: Desc)])
   @@index([scenarioId, createdAt(sort: Desc)])
@@ -787,6 +811,23 @@ model DecisionPack {
   run                SimulationRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
 
   @@index([createdAt(sort: Desc)])
+}
+
+model RunDecisionLogResolution {
+  id               String                   @id @default(cuid())
+  runId            String
+  decisionKey      String
+  status           DecisionResolutionStatus @default(DRAFT)
+  owner            String?
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+  resolutionNote   String?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  run              SimulationRun            @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, decisionKey])
+  @@index([runId, status, updatedAt(sort: Desc)])
 }
 
 model AuditEvent {

@@ -67,6 +67,69 @@ const evidenceLevelLabels: Record<string, string> = {
   proxy: "Proxy Estimate"
 };
 
+const historicalTruthCoverageLabels: Record<string, string> = {
+  strong: "Strong",
+  partial: "Partial",
+  weak: "Weak",
+  available: "Available",
+  missing: "Missing"
+};
+
+const setupStatusLabels: Record<string, string> = {
+  recommended: "Recommended",
+  caution: "Assumption",
+  locked: "Locked"
+};
+
+const decisionLogStatusLabels: Record<string, string> = {
+  fixed_truth: "Fixed Truth",
+  recommended: "Recommended",
+  pending_founder: "Pending Founder",
+  blocked: "Blocked"
+};
+
+const decisionGovernanceStatusLabels: Record<string, string> = {
+  draft: "Draft",
+  proposed: "Proposed",
+  accepted: "Accepted",
+  rejected: "Rejected",
+  deferred: "Deferred"
+};
+
+const truthClassificationLabels: Record<string, string> = {
+  historical_truth: "Historical Truth",
+  scenario_lever: "Scenario Lever",
+  scenario_assumption: "Scenario Assumption",
+  locked_boundary: "Locked Boundary",
+  derived_assessment: "Derived Assessment"
+};
+
+const snapshotSourceTypeLabels: Record<string, string> = {
+  compatibility_csv: "Compatibility CSV",
+  canonical_json: "Canonical JSON",
+  canonical_bundle: "Canonical Bundle",
+  hybrid_verified: "Hybrid Verified"
+};
+
+const snapshotValidationBasisLabels: Record<string, string> = {
+  monthly_facts: "Monthly Facts",
+  canonical_events: "Canonical Events",
+  hybrid_validation: "Hybrid Validation"
+};
+
+const snapshotFounderReadinessLabels: Record<string, string> = {
+  founder_safe: "Founder-Safe",
+  needs_canonical_closure: "Needs Canonical Closure"
+};
+
+const canonicalGapStatusLabels: Record<string, string> = {
+  covered: "Covered",
+  partial: "Partial",
+  missing: "Missing",
+  strong: "Strong",
+  weak: "Weak"
+};
+
 const dataSetStatusLabels: Record<string, string> = {
   APPROVED: "Approved",
   ARCHIVED: "Archived",
@@ -176,6 +239,42 @@ export function getRunStatusLabel(status: string) {
 
 export function getEvidenceLevelLabel(level: string) {
   return evidenceLevelLabels[level] ?? toTitleCase(level);
+}
+
+export function getHistoricalTruthCoverageLabel(status: string) {
+  return historicalTruthCoverageLabels[status] ?? toTitleCase(status);
+}
+
+export function getSetupStatusLabel(status: string) {
+  return setupStatusLabels[status] ?? toTitleCase(status);
+}
+
+export function getDecisionLogStatusLabel(status: string) {
+  return decisionLogStatusLabels[status] ?? toTitleCase(status);
+}
+
+export function getDecisionGovernanceStatusLabel(status: string) {
+  return decisionGovernanceStatusLabels[status] ?? toTitleCase(status);
+}
+
+export function getTruthClassificationLabel(classification: string) {
+  return truthClassificationLabels[classification] ?? toTitleCase(classification);
+}
+
+export function getSnapshotSourceTypeLabel(sourceType: string) {
+  return snapshotSourceTypeLabels[sourceType] ?? toTitleCase(sourceType);
+}
+
+export function getSnapshotValidationBasisLabel(validatedVia: string) {
+  return snapshotValidationBasisLabels[validatedVia] ?? toTitleCase(validatedVia);
+}
+
+export function getSnapshotFounderReadinessLabel(readiness: string) {
+  return snapshotFounderReadinessLabels[readiness] ?? toTitleCase(readiness);
+}
+
+export function getCanonicalGapStatusLabel(status: string) {
+  return canonicalGapStatusLabels[status] ?? toTitleCase(status);
 }
 
 export function getDataSetStatusLabel(status: string) {

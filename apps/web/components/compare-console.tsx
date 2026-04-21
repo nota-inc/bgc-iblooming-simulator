@@ -6,7 +6,9 @@ import {
   formatCommonMetricValue,
   formatMonthCountLabel,
   getCommonMetricLabel,
+  getDecisionGovernanceStatusLabel,
   getEvidenceLevelLabel,
+  getCanonicalGapStatusLabel,
   getPolicyStatusLabel,
   getRunReference,
   getRunStatusLabel,
@@ -20,6 +22,7 @@ import {
   compareSeriesColors,
   compareTreasuryMetricKeys
 } from "@/lib/compare-config";
+import { buildCompareDecisionSupportArtifacts } from "@/lib/decision-support";
 
 import { CompareRadarChart } from "./compare-radar-chart";
 
@@ -48,8 +51,26 @@ type CompareRun = {
 type RunExtra = {
   runId: string;
   verdict: string;
+  parameters: {
+    k_pc: number;
+    k_sp: number;
+    reward_global_factor: number;
+    reward_pool_factor: number;
+    cap_user_monthly: string;
+    cap_group_monthly: string;
+    sink_target: number;
+    cashout_mode: "ALWAYS_OPEN" | "WINDOWS";
+    cashout_min_usd: number;
+    cashout_fee_bps: number;
+    cashout_windows_per_year: number;
+    cashout_window_days: number;
+    projection_horizon_months: number | null;
+    milestone_count: number;
+    cohort_projection_label: string;
+  };
   strategicObjectives: {
     objective_key: string;
+    label: string;
     status: string;
     score: number;
     evidence_level: string;
@@ -73,6 +94,60 @@ type RunExtra = {
       reward_concentration_top10_pct: number;
     };
   }[];
+  historicalTruthCoverage: {
+    status: "strong" | "partial" | "weak";
+    summary: string;
+    rows: {
+      key: string;
+      label: string;
+      status: "available" | "partial" | "missing";
+      detail: string;
+    }[];
+  } | null;
+  recommendedSetup: {
+    title: string;
+    summary: string;
+    items: {
+      parameter_key: string;
+      label: string;
+      value: string;
+      status: "recommended" | "caution" | "locked";
+      rationale: string;
+    }[];
+    warnings: string[];
+  } | null;
+  decisionLog: {
+    key: string;
+    title: string;
+    status: "fixed_truth" | "recommended" | "pending_founder" | "blocked";
+    owner: string;
+    rationale: string;
+    governance_status: "draft" | "proposed" | "accepted" | "rejected" | "deferred" | null;
+    governance_owner: string;
+    resolution_note: string | null;
+    reviewed_at: string | null;
+    reviewed_by_user_id: string | null;
+  }[];
+  truthAssumptionMatrix: {
+    key: string;
+    label: string;
+    value: string;
+    classification: "historical_truth" | "scenario_lever" | "scenario_assumption" | "locked_boundary" | "derived_assessment";
+    note: string;
+  }[];
+  canonicalGapAudit: {
+    readiness: "strong" | "partial" | "weak";
+    summary: string;
+    rows: {
+      key: string;
+      label: string;
+      status: "covered" | "partial" | "missing";
+      detail: string;
+    }[];
+  } | null;
+  adoptedBaselineRunId: string | null;
+  adoptedBaselineAt: string | null;
+  adoptedBaselineNote: string | null;
 };
 
 type CompareConsoleProps = {
@@ -233,6 +308,32 @@ export function CompareConsole({
     ];
   }, [filteredExtras]);
 
+  const truthCoverageRows = useMemo(() => {
+    return [
+      ...new Set(
+        filteredExtras.flatMap((extra) =>
+          (extra.historicalTruthCoverage?.rows ?? []).map((row) => `${row.key}::${row.label}`)
+        )
+      )
+    ];
+  }, [filteredExtras]);
+  const canonicalGapRows = useMemo(() => {
+    return [
+      ...new Set(
+        filteredExtras.flatMap((extra) =>
+          (extra.canonicalGapAudit?.rows ?? []).map((row) => `${row.key}::${row.label}`)
+        )
+      )
+    ];
+  }, [filteredExtras]);
+  const decisionGovernanceRows = useMemo(() => {
+    return [
+      ...new Set(
+        filteredExtras.flatMap((extra) => extra.decisionLog.map((entry) => `${entry.key}::${entry.title}`))
+      )
+    ];
+  }, [filteredExtras]);
+
   const radarData = useMemo(() => {
     if (filteredRuns.length === 0) {
       return { dimensions: [] as { name: string; max: number }[], series: [] as { name: string; color: string; values: number[] }[] };
@@ -266,6 +367,49 @@ export function CompareConsole({
     return { dimensions, series };
   }, [filteredRuns, runDisplayLabels, runs, summaryByRunId]);
 
+  const decisionSupport = useMemo(() => {
+    return buildCompareDecisionSupportArtifacts(
+      filteredRuns.map((run) => {
+        const extra = extrasByRunId.get(run.id);
+
+        return {
+          id: run.id,
+          label: runDisplayLabels.get(run.id) ?? run.scenario.name,
+          scenarioName: run.scenario.name,
+          snapshotName: run.snapshot.name,
+          verdict: extra?.verdict ?? "pending",
+          summaryMetrics: Object.fromEntries(
+            run.summaryMetrics.map((metric) => [metric.metricKey, metric.metricValue] as const)
+          ),
+          parameters:
+            extra?.parameters ?? {
+              k_pc: 1,
+              k_sp: 1,
+              reward_global_factor: 1,
+              reward_pool_factor: 1,
+              cap_user_monthly: "0",
+              cap_group_monthly: "0",
+              sink_target: 0,
+              cashout_mode: "WINDOWS",
+              cashout_min_usd: 0,
+              cashout_fee_bps: 0,
+              cashout_windows_per_year: 0,
+              cashout_window_days: 0,
+              projection_horizon_months: null,
+              milestone_count: 0,
+              cohort_projection_label: "disabled in founder-safe mode"
+            },
+          historicalTruthCoverage: extra?.historicalTruthCoverage ?? null,
+          strategicObjectives: extra?.strategicObjectives ?? [],
+          milestoneEvaluations: extra?.milestoneEvaluations ?? [],
+          decisionLog: extra?.decisionLog ?? [],
+          truthAssumptionMatrix: extra?.truthAssumptionMatrix ?? [],
+          recommendedSetup: extra?.recommendedSetup ?? null
+        };
+      })
+    );
+  }, [extrasByRunId, filteredRuns, runDisplayLabels]);
+
   function getMetricValue(run: CompareRun, metricKey: string) {
     return summaryByRunId.get(run.id)?.get(metricKey) ?? 0;
   }
@@ -283,6 +427,38 @@ export function CompareConsole({
     if (value === bestValue) return "cell-best";
     if (value === worstValue) return "cell-worst";
     return "";
+  }
+
+  function getDecisionLogBadge(status: string) {
+    if (status === "recommended") return "badge--candidate";
+    if (status === "pending_founder") return "badge--risky";
+    if (status === "blocked") return "badge--rejected";
+    return "badge--neutral";
+  }
+
+  function getDecisionLogStatusLabel(status: string) {
+    if (status === "fixed_truth") return "Fixed Truth";
+    if (status === "recommended") return "Recommended";
+    if (status === "pending_founder") return "Founder Decision";
+    if (status === "blocked") return "Blocked";
+    return status;
+  }
+
+  function getTruthClassificationLabel(classification: string) {
+    switch (classification) {
+      case "historical_truth":
+        return "Historical Truth";
+      case "scenario_lever":
+        return "Scenario Lever";
+      case "scenario_assumption":
+        return "Scenario Assumption";
+      case "locked_boundary":
+        return "Locked Boundary";
+      case "derived_assessment":
+        return "Derived Assessment";
+      default:
+        return classification;
+    }
   }
 
   function toggleRun(id: string) {
@@ -527,6 +703,9 @@ export function CompareConsole({
                       <span className={`badge ${getVerdictBadge(extra?.verdict ?? "pending")}`}>
                         {getPolicyStatusLabel(extra?.verdict ?? "pending")}
                       </span>
+                      {extra?.adoptedBaselineRunId === run.id ? (
+                        <span className="badge badge--info">Current Baseline</span>
+                      ) : null}
                     </div>
                     <div className="compare-mini-grid">
                       <span>
@@ -546,6 +725,12 @@ export function CompareConsole({
                         <strong>{formatMonthCountLabel(runway)}</strong>
                       </span>
                     </div>
+                    {extra?.adoptedBaselineRunId === run.id && extra.adoptedBaselineAt ? (
+                      <p className="muted" style={{ marginTop: "0.75rem" }}>
+                        Adopted {new Date(extra.adoptedBaselineAt).toLocaleString("en-US")}
+                        {extra.adoptedBaselineNote ? ` · ${extra.adoptedBaselineNote}` : ""}
+                      </p>
+                    ) : null}
                   </article>
                 );
               })}
@@ -560,6 +745,347 @@ export function CompareConsole({
               compareCashflowMetricKeys
             )
           : null}
+
+        {filteredRuns.length > 0 ? (
+          <div className="card span-12">
+            <h3>Historical Truth Coverage</h3>
+            <p className="muted compare-section-note">
+              Canonical and derived truth coverage behind each selected run. This closes the gap between scenario discussion and the actual stored business evidence.
+            </p>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Coverage Layer</th>
+                    {filteredRuns.map((run) => (
+                      <th key={`${run.id}-truth-coverage`}>{runDisplayLabels.get(run.id) ?? run.scenario.name}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>Overall Coverage</strong></td>
+                    {filteredRuns.map((run) => {
+                      const coverage = extrasByRunId.get(run.id)?.historicalTruthCoverage;
+                      return (
+                        <td key={`${run.id}-truth-overall`}>
+                          <div className="compare-rich-cell">
+                            <span className={`badge ${getVerdictBadge(coverage?.status === "strong" ? "candidate" : coverage?.status === "partial" ? "risky" : "rejected")}`}>
+                              {coverage?.status ?? "weak"}
+                            </span>
+                            {coverage?.summary ? <p>{coverage.summary}</p> : <p>No truth coverage summary recorded.</p>}
+                          </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                  {truthCoverageRows.map((coverageRow) => {
+                    const [coverageKey, coverageLabel] = coverageRow.split("::");
+                    return (
+                      <tr key={coverageRow}>
+                        <td>{coverageLabel}</td>
+                        {filteredRuns.map((run) => {
+                          const coverage = extrasByRunId
+                            .get(run.id)
+                            ?.historicalTruthCoverage?.rows.find((row) => row.key === coverageKey);
+
+                          if (!coverage) {
+                            return <td key={`${run.id}-${coverageKey}`} className="muted">N/A</td>;
+                          }
+
+                          return (
+                            <td key={`${run.id}-${coverageKey}`}>
+                              <div className="compare-rich-cell">
+                                <span className={`badge ${getVerdictBadge(coverage.status === "available" ? "candidate" : coverage.status === "partial" ? "risky" : "rejected")}`}>
+                                  {coverage.status}
+                                </span>
+                                <p>{coverage.detail}</p>
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
+
+        {filteredRuns.length > 0 ? (
+          <div className="card span-12">
+            <h3>Canonical Fidelity Audit</h3>
+            <p className="muted compare-section-note">
+              Rule-family audit for where canonical/event-native closure is already covered and where stronger fidelity work is still needed.
+            </p>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Rule Family</th>
+                    {filteredRuns.map((run) => (
+                      <th key={`${run.id}-canonical-gap`}>{runDisplayLabels.get(run.id) ?? run.scenario.name}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>Overall Fidelity Readiness</strong></td>
+                    {filteredRuns.map((run) => {
+                      const audit = extrasByRunId.get(run.id)?.canonicalGapAudit;
+                      return (
+                        <td key={`${run.id}-canonical-overall`}>
+                          <div className="compare-rich-cell">
+                            <span className={`badge ${getVerdictBadge(audit?.readiness === "strong" ? "candidate" : audit?.readiness === "partial" ? "risky" : "rejected")}`}>
+                              {audit?.readiness ?? "weak"}
+                            </span>
+                            {audit?.summary ? <p>{audit.summary}</p> : <p>No canonical fidelity audit recorded.</p>}
+                          </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                  {canonicalGapRows.map((gapRow) => {
+                    const [gapKey, gapLabel] = gapRow.split("::");
+                    return (
+                      <tr key={gapRow}>
+                        <td>{gapLabel}</td>
+                        {filteredRuns.map((run) => {
+                          const auditRow = extrasByRunId
+                            .get(run.id)
+                            ?.canonicalGapAudit?.rows.find((row) => row.key === gapKey);
+
+                          if (!auditRow) {
+                            return <td key={`${run.id}-${gapKey}`} className="muted">N/A</td>;
+                          }
+
+                          return (
+                            <td key={`${run.id}-${gapKey}`}>
+                              <div className="compare-rich-cell">
+                                <span className={`badge ${getVerdictBadge(auditRow.status === "covered" ? "candidate" : auditRow.status === "partial" ? "risky" : "rejected")}`}>
+                                  {getCanonicalGapStatusLabel(auditRow.status)}
+                                </span>
+                                <p>{auditRow.detail}</p>
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
+
+        {filteredRuns.length > 0 ? (
+          <div className="card span-12">
+            <h3>Recommended Pilot Envelope</h3>
+            <p className="muted compare-section-note">
+              Compare-level recommendation. This is the strongest current pilot envelope across the selected runs, not a claim that historical truth itself changed.
+            </p>
+            <div className="decision-summary">
+              <div className="decision-summary__verdict">
+                <span className={`badge ${getVerdictBadge(
+                  decisionSupport.recommendedEnvelope.status === "recommended"
+                    ? "candidate"
+                    : decisionSupport.recommendedEnvelope.status === "review"
+                      ? "risky"
+                      : "rejected"
+                )}`}>
+                  {decisionSupport.recommendedEnvelope.status === "recommended"
+                    ? "Recommended"
+                    : decisionSupport.recommendedEnvelope.status === "review"
+                      ? "Needs Review"
+                      : "Blocked"}
+                </span>
+                <p style={{ marginTop: "0.75rem" }}>{decisionSupport.recommendedEnvelope.summary}</p>
+                {decisionSupport.recommendedEnvelope.recommendedRunLabel ? (
+                  <p className="muted" style={{ marginTop: "0.5rem" }}>
+                    Current strongest run: <strong>{decisionSupport.recommendedEnvelope.recommendedRunLabel}</strong>
+                  </p>
+                ) : null}
+              </div>
+              <div className="decision-summary__meta">
+                {decisionSupport.recommendedEnvelope.reasons.map((reason) => (
+                  <div key={reason}>
+                    <span>Reason</span>
+                    <strong>{reason}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="table-wrap" style={{ marginTop: "1rem" }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Setup Item</th>
+                    <th>Value</th>
+                    <th>Status</th>
+                    <th>Rationale</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {decisionSupport.recommendedEnvelope.items.map((item) => (
+                    <tr key={item.label}>
+                      <td><strong>{item.label}</strong></td>
+                      <td>{item.value}</td>
+                      <td>
+                        <span className={`badge ${item.status === "recommended" ? "badge--candidate" : item.status === "caution" ? "badge--risky" : "badge--neutral"}`}>
+                          {item.status === "recommended" ? "Recommended" : item.status === "caution" ? "Assumption" : "Locked"}
+                        </span>
+                      </td>
+                      <td>{item.rationale}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
+
+        {filteredRuns.length > 0 ? (
+          <div className="card span-12">
+            <h3>Parameter Range Synthesis</h3>
+            <p className="muted compare-section-note">
+              Tested values across the selected runs, normalized into ready, caution, and rejected ranges so founder discussion can stay in envelope language instead of single numbers only.
+            </p>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Parameter</th>
+                    <th>Guardrail</th>
+                    <th>Recommended Range</th>
+                    <th>Caution Range</th>
+                    <th>Rejected Range</th>
+                    <th>Tested Values</th>
+                    <th>Evidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {decisionSupport.parameterRanges.map((row) => (
+                    <tr key={row.parameterKey}>
+                      <td>
+                        <strong>{row.label}</strong>
+                        <div className="muted" style={{ fontSize: "0.74rem", marginTop: "0.25rem" }}>{row.rationale}</div>
+                      </td>
+                      <td>
+                        <span className={`badge ${row.guardrailStatus === "allowed" ? "badge--candidate" : row.guardrailStatus === "conditional" ? "badge--risky" : "badge--neutral"}`}>
+                          {row.guardrailStatus === "allowed" ? "Allowed" : row.guardrailStatus === "conditional" ? "Assumption" : "Locked"}
+                        </span>
+                      </td>
+                      <td>{row.recommendedValues}</td>
+                      <td>{row.cautionValues ?? "n/a"}</td>
+                      <td>{row.rejectedValues ?? "n/a"}</td>
+                      <td>{row.testedValues}</td>
+                      <td>{row.evidence}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
+
+        {filteredRuns.length > 0 ? (
+          <div className="card span-12">
+            <h3>Decision Governance Snapshot</h3>
+            <p className="muted compare-section-note">
+              Generated decision items plus the current governance state saved against each run.
+            </p>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Decision Item</th>
+                    {filteredRuns.map((run) => (
+                      <th key={`${run.id}-decision-governance`}>{runDisplayLabels.get(run.id) ?? run.scenario.name}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {decisionGovernanceRows.map((decisionRow) => {
+                    const [decisionKey, decisionTitle] = decisionRow.split("::");
+                    return (
+                      <tr key={decisionRow}>
+                        <td><strong>{decisionTitle}</strong></td>
+                        {filteredRuns.map((run) => {
+                          const entry = extrasByRunId
+                            .get(run.id)
+                            ?.decisionLog.find((item) => item.key === decisionKey);
+
+                          if (!entry) {
+                            return <td key={`${run.id}-${decisionKey}`} className="muted">N/A</td>;
+                          }
+
+                          return (
+                            <td key={`${run.id}-${decisionKey}`}>
+                              <div className="compare-rich-cell">
+                                <span className={`badge ${getDecisionLogBadge(entry.status)}`}>
+                                  {getDecisionLogStatusLabel(entry.status)}
+                                </span>
+                                <small>
+                                  Governance: {getDecisionGovernanceStatusLabel(entry.governance_status ?? "draft")} · {entry.governance_owner}
+                                </small>
+                                {entry.resolution_note ? <p>{entry.resolution_note}</p> : <p>{entry.rationale}</p>}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
+
+        {filteredRuns.length > 0 ? (
+          <div className="card span-12">
+            <h3>Truth vs Assumption Matrix</h3>
+            <p className="muted compare-section-note">
+              This matrix keeps historical truth, scenario levers, conditional assumptions, locked boundaries, and derived assessments visibly separate.
+            </p>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Classification</th>
+                    <th>Value</th>
+                    <th>Note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {decisionSupport.truthAssumptionMatrix.map((item) => (
+                    <tr key={item.key}>
+                      <td><strong>{item.label}</strong></td>
+                      <td>
+                        <span className={`badge ${
+                          item.classification === "historical_truth"
+                            ? "badge--candidate"
+                            : item.classification === "scenario_assumption"
+                              ? "badge--risky"
+                              : item.classification === "locked_boundary"
+                                ? "badge--neutral"
+                                : "badge--info"
+                        }`}>
+                          {getTruthClassificationLabel(item.classification)}
+                        </span>
+                      </td>
+                      <td>{item.value}</td>
+                      <td>{item.note}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
 
         {filteredRuns.length > 0
           ? renderMetricTable(

@@ -43,6 +43,50 @@ export type SimulationResultExportMilestone = {
   reasons: string[];
 };
 
+export type SimulationResultExportHistoricalTruthCoverage = {
+  status: string;
+  summary: string;
+  rows: Array<{
+    label: string;
+    status: string;
+    detail: string;
+  }>;
+};
+
+export type SimulationResultExportSetupItem = {
+  label: string;
+  value: string;
+  status: string;
+  rationale: string;
+};
+
+export type SimulationResultExportDecisionLogEntry = {
+  title: string;
+  status: string;
+  owner: string;
+  rationale: string;
+  governanceStatus?: string | null;
+  resolutionNote?: string | null;
+  reviewedAt?: string | null;
+};
+
+export type SimulationResultExportTruthAssumptionItem = {
+  label: string;
+  classification: string;
+  value: string;
+  note: string;
+};
+
+export type SimulationResultExportCanonicalGapAudit = {
+  readiness: string;
+  summary: string;
+  rows: Array<{
+    label: string;
+    status: string;
+    detail: string;
+  }>;
+};
+
 export type SimulationResultExportDecisionPack = {
   title: string;
   verdict: string;
@@ -50,6 +94,17 @@ export type SimulationResultExportDecisionPack = {
   preferredSettings: string[];
   rejectedSettings: string[];
   unresolvedQuestions: string[];
+  historicalTruthCoverage: SimulationResultExportHistoricalTruthCoverage | null;
+  canonicalGapAudit: SimulationResultExportCanonicalGapAudit | null;
+  recommendedSetup: {
+    title: string;
+    summary: string;
+    items: SimulationResultExportSetupItem[];
+    warnings: string[];
+  } | null;
+  adoptedBaselineSummary: string | null;
+  decisionLog: SimulationResultExportDecisionLogEntry[];
+  truthAssumptionMatrix: SimulationResultExportTruthAssumptionItem[];
   strategicObjectives: SimulationResultExportObjective[];
   milestoneCheckpoints: SimulationResultExportMilestone[];
 };
@@ -167,6 +222,76 @@ ${renderList(report.decisionPack.preferredSettings, "None.")}
 ### Blockers / Rejection Reasons
 
 ${renderList(report.decisionPack.rejectedSettings, "None.")}
+
+### Historical Truth Coverage
+
+${
+  !report.decisionPack.historicalTruthCoverage
+    ? "No historical truth coverage summary."
+    : `- Coverage: ${report.decisionPack.historicalTruthCoverage.status}
+- Summary: ${report.decisionPack.historicalTruthCoverage.summary}
+
+| Coverage Layer | Status | Detail |
+| --- | --- | --- |
+${report.decisionPack.historicalTruthCoverage.rows.map((row) => `| ${row.label} | ${row.status} | ${row.detail} |`).join("\n")}`
+}
+
+### Canonical Fidelity Audit
+
+${
+  !report.decisionPack.canonicalGapAudit
+    ? "No canonical fidelity audit."
+    : `- Readiness: ${report.decisionPack.canonicalGapAudit.readiness}
+- Summary: ${report.decisionPack.canonicalGapAudit.summary}
+
+| Rule Family | Status | Detail |
+| --- | --- | --- |
+${report.decisionPack.canonicalGapAudit.rows.map((row) => `| ${row.label} | ${row.status} | ${row.detail} |`).join("\n")}`
+}
+
+### Recommended Pilot Envelope
+
+${
+  !report.decisionPack.recommendedSetup
+    ? "No structured recommended setup."
+    : `${report.decisionPack.adoptedBaselineSummary ? `- Current baseline: ${report.decisionPack.adoptedBaselineSummary}\n` : ""}- Title: ${report.decisionPack.recommendedSetup.title}
+- Summary: ${report.decisionPack.recommendedSetup.summary}
+
+| Setup Item | Value | Status | Rationale |
+| --- | --- | --- | --- |
+${report.decisionPack.recommendedSetup.items.map((item) => `| ${item.label} | ${item.value} | ${item.status} | ${item.rationale} |`).join("\n")}
+
+Warnings:
+${renderList(report.decisionPack.recommendedSetup.warnings, "None.")}`
+}
+
+### Decision Log
+
+${
+  report.decisionPack.decisionLog.length === 0
+    ? "No structured decision log."
+    : [
+        "| Decision Item | Generated Status | Governance | Owner | Rationale / Resolution |",
+        "| --- | --- | --- | --- | --- |",
+        ...report.decisionPack.decisionLog.map(
+          (entry) => `| ${entry.title} | ${entry.status} | ${entry.governanceStatus ?? "Draft"} | ${entry.owner} | ${entry.resolutionNote ?? entry.rationale} |`
+        )
+      ].join("\n")
+}
+
+### Truth vs Assumption Matrix
+
+${
+  report.decisionPack.truthAssumptionMatrix.length === 0
+    ? "No truth vs assumption matrix."
+    : [
+        "| Item | Classification | Value | Note |",
+        "| --- | --- | --- | --- |",
+        ...report.decisionPack.truthAssumptionMatrix.map(
+          (item) => `| ${item.label} | ${item.classification} | ${item.value} | ${item.note} |`
+        )
+      ].join("\n")
+}
 
 ### Strategic Goals
 
@@ -356,6 +481,196 @@ export function renderSimulationResultCsv(report: SimulationResultExport) {
 
   for (const item of report.decisionPack.rejectedSettings) {
     rows.push(renderCsvRow(["decision_pack", "blocker", item, "Blocker / Rejection Reason", "", "", "", "", "", item, "", ""]));
+  }
+
+  if (report.decisionPack.historicalTruthCoverage) {
+    rows.push(
+      renderCsvRow([
+        "decision_pack",
+        "historical_truth_coverage",
+        "overall",
+        "Historical Truth Coverage",
+        report.decisionPack.historicalTruthCoverage.status,
+        "",
+        "",
+        "",
+        "",
+        report.decisionPack.historicalTruthCoverage.summary,
+        "",
+        ""
+      ])
+    );
+
+    for (const row of report.decisionPack.historicalTruthCoverage.rows) {
+      rows.push(
+        renderCsvRow([
+          "decision_pack",
+          "historical_truth_coverage_row",
+          row.label,
+          row.label,
+          row.status,
+          "",
+          "",
+          "",
+          "",
+          row.detail,
+          "",
+          ""
+        ])
+      );
+    }
+  }
+
+  if (report.decisionPack.canonicalGapAudit) {
+    rows.push(
+      renderCsvRow([
+        "decision_pack",
+        "canonical_gap_audit",
+        "overall",
+        "Canonical Fidelity Audit",
+        report.decisionPack.canonicalGapAudit.readiness,
+        "",
+        "",
+        "",
+        "",
+        report.decisionPack.canonicalGapAudit.summary,
+        "",
+        ""
+      ])
+    );
+
+    for (const row of report.decisionPack.canonicalGapAudit.rows) {
+      rows.push(
+        renderCsvRow([
+          "decision_pack",
+          "canonical_gap_audit_row",
+          row.label,
+          row.label,
+          row.status,
+          "",
+          "",
+          "",
+          "",
+          row.detail,
+          "",
+          ""
+        ])
+      );
+    }
+  }
+
+  if (report.decisionPack.recommendedSetup) {
+    rows.push(
+      renderCsvRow([
+        "decision_pack",
+        "recommended_setup",
+        report.decisionPack.recommendedSetup.title,
+        report.decisionPack.recommendedSetup.title,
+        "",
+        "",
+        "",
+        "",
+        "",
+        report.decisionPack.recommendedSetup.summary,
+        "",
+        ""
+      ])
+    );
+
+    if (report.decisionPack.adoptedBaselineSummary) {
+      rows.push(
+        renderCsvRow([
+          "decision_pack",
+          "adopted_baseline",
+          "current_baseline",
+          "Current Pilot Baseline",
+          "",
+          "",
+          "",
+          "",
+          "",
+          report.decisionPack.adoptedBaselineSummary,
+          "",
+          ""
+        ])
+      );
+    }
+
+    for (const item of report.decisionPack.recommendedSetup.items) {
+      rows.push(
+        renderCsvRow([
+          "decision_pack",
+          "recommended_setup_item",
+          item.label,
+          item.label,
+          item.status,
+          "",
+          "",
+          "",
+          "",
+          item.value,
+          item.rationale,
+          ""
+        ])
+      );
+    }
+
+    for (const warning of report.decisionPack.recommendedSetup.warnings) {
+      rows.push(
+        renderCsvRow([
+          "decision_pack",
+          "recommended_setup_warning",
+          warning,
+          "Recommended Setup Warning",
+          "",
+          "Warning",
+          "",
+          "",
+          "",
+          warning,
+          "",
+          ""
+        ])
+      );
+    }
+  }
+
+  for (const entry of report.decisionPack.decisionLog) {
+    rows.push(
+      renderCsvRow([
+        "decision_pack",
+        "decision_log",
+        entry.title,
+        entry.title,
+        entry.status,
+        "",
+        "",
+        "",
+        entry.owner,
+        entry.resolutionNote ?? entry.rationale,
+        entry.governanceStatus ?? "",
+        ""
+      ])
+    );
+  }
+
+  for (const item of report.decisionPack.truthAssumptionMatrix) {
+    rows.push(
+      renderCsvRow([
+        "decision_pack",
+        "truth_assumption_matrix",
+        item.label,
+        item.label,
+        item.classification,
+        "",
+        "",
+        "",
+        "",
+        item.value,
+        item.note,
+        ""
+      ])
+    );
   }
 
   for (const objective of report.decisionPack.strategicObjectives) {

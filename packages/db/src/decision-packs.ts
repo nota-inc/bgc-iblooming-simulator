@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { DecisionResolutionStatus } from "@prisma/client";
 
 import { prisma } from "./client";
 
@@ -44,6 +45,53 @@ export async function upsertRunDecisionPack(input: UpsertRunDecisionPackInput) {
       recommendationJson: input.recommendationJson,
       createdBy: input.createdBy ?? null,
       exportStatus: "READY"
+    }
+  });
+}
+
+export async function listDecisionLogResolutionsForRun(runId: string) {
+  return prisma.runDecisionLogResolution.findMany({
+    where: {
+      runId
+    },
+    orderBy: [
+      {
+        updatedAt: "desc"
+      }
+    ]
+  });
+}
+
+export async function upsertDecisionLogResolution(input: {
+  runId: string;
+  decisionKey: string;
+  status: DecisionResolutionStatus;
+  owner?: string | null;
+  reviewedByUserId?: string | null;
+  resolutionNote?: string | null;
+}) {
+  return prisma.runDecisionLogResolution.upsert({
+    where: {
+      runId_decisionKey: {
+        runId: input.runId,
+        decisionKey: input.decisionKey
+      }
+    },
+    update: {
+      status: input.status,
+      owner: input.owner ?? undefined,
+      reviewedByUserId: input.reviewedByUserId ?? null,
+      reviewedAt: new Date(),
+      resolutionNote: input.resolutionNote ?? null
+    },
+    create: {
+      runId: input.runId,
+      decisionKey: input.decisionKey,
+      status: input.status,
+      owner: input.owner ?? null,
+      reviewedByUserId: input.reviewedByUserId ?? null,
+      reviewedAt: new Date(),
+      resolutionNote: input.resolutionNote ?? null
     }
   });
 }

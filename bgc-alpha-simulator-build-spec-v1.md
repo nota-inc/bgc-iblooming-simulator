@@ -212,6 +212,8 @@ Manage the dataset snapshot used for simulation.
 - validation summary
 - schema coverage summary
 - data quality issues table
+- storage cleanup maintenance panel below the registry
+- collapsible cleanup candidate detail
 
 ### User Actions
 
@@ -219,7 +221,7 @@ Manage the dataset snapshot used for simulation.
 - trigger validation
 - mark snapshot as approved for simulation
 - archive old snapshot
-- inspect storage cleanup candidates without purging active truth
+- inspect storage cleanup candidates in a secondary maintenance panel without purging active truth
 
 ### Required Fields per Snapshot
 

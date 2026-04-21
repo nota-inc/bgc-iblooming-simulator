@@ -253,6 +253,7 @@ The MVP must support:
 3. System shows data quality summary and snapshot version.
 4. User confirms snapshot for scenario work.
 5. Older snapshots can be archived from the active registry without deleting historical truth.
+6. Storage cleanup guidance is shown below the snapshot registry as a secondary maintenance panel, with candidate detail collapsed by default.
 
 ### Flow 2: Create a Scenario
 
@@ -294,7 +295,7 @@ Requirements:
 - preserve immutable snapshot versions for reproducibility,
 - prevent a run from proceeding against an invalid snapshot,
 - support reversible archive state for registry cleanup,
-- surface a storage-cleanup report without deleting active truth.
+- surface a storage-cleanup report below the registry, with collapsible candidate detail and without deleting active truth.
 
 ### FR-02 Baseline Model Library
 

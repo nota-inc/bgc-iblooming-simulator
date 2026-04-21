@@ -164,7 +164,7 @@ Layar `Snapshots` adalah tempat user:
 - menjalankan validasi
 - menyetujui snapshot untuk dipakai dalam simulasi
 - meng-archive snapshot lama dari registry default
-- melihat ringkasan storage cleanup policy tanpa menghapus data
+- melihat ringkasan storage cleanup policy di bawah registry snapshot, dengan detail maintenance yang bisa dibuka-tutup dan tanpa menghapus data
 
 ### Scenarios
 

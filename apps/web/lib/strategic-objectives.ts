@@ -1,7 +1,15 @@
 import {
+  canonicalGapAuditSchema,
   decisionPackSchema,
+  decisionLogResolutionSchema,
+  type CanonicalGapAudit,
   type DecisionPack,
+  type DecisionPackDecisionLogEntry,
+  type DecisionPackHistoricalTruthCoverage,
+  type DecisionLogResolution,
   type MilestoneEvaluation,
+  type DecisionPackRecommendedSetup,
+  type DecisionPackTruthAssumptionItem,
   type StrategicMetricUnit,
   type StrategicObjectiveKey,
   type StrategicObjectiveScorecard
@@ -56,6 +64,65 @@ export function readMilestoneEvaluations(value: unknown) {
   return milestones
     .filter((milestone): milestone is MilestoneEvaluation => Boolean(milestone))
     .sort((left, right) => left.start_period_key.localeCompare(right.start_period_key));
+}
+
+export function readHistoricalTruthCoverage(value: unknown): DecisionPackHistoricalTruthCoverage | null {
+  return readDecisionPack(value)?.historical_truth_coverage ?? null;
+}
+
+export function readRecommendedSetup(value: unknown): DecisionPackRecommendedSetup | null {
+  return readDecisionPack(value)?.recommended_setup ?? null;
+}
+
+export function readDecisionLog(value: unknown): DecisionPackDecisionLogEntry[] {
+  return readDecisionPack(value)?.decision_log ?? [];
+}
+
+export function readTruthAssumptionMatrix(value: unknown): DecisionPackTruthAssumptionItem[] {
+  return readDecisionPack(value)?.truth_assumption_matrix ?? [];
+}
+
+export function readCanonicalGapAudit(value: unknown): CanonicalGapAudit | null {
+  return readDecisionPack(value)?.canonical_gap_audit ?? null;
+}
+
+export type DecisionLogDisplayEntry = DecisionPackDecisionLogEntry & {
+  governance_status: DecisionLogResolution["status"] | null;
+  governance_owner: string;
+  resolution_note: string | null;
+  reviewed_at: string | null;
+  reviewed_by_user_id: string | null;
+};
+
+export function readDecisionLogResolutions(value: unknown): DecisionLogResolution[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((item) => {
+    const parsed = decisionLogResolutionSchema.safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
+
+export function mergeDecisionLogWithResolutions(
+  entries: DecisionPackDecisionLogEntry[],
+  resolutions: DecisionLogResolution[]
+): DecisionLogDisplayEntry[] {
+  const resolutionByKey = new Map(resolutions.map((item) => [item.decision_key, item] as const));
+
+  return entries.map((entry) => {
+    const resolution = resolutionByKey.get(entry.key);
+
+    return {
+      ...entry,
+      governance_status: resolution?.status ?? null,
+      governance_owner: resolution?.owner ?? entry.owner,
+      resolution_note: resolution?.resolution_note ?? null,
+      reviewed_at: resolution?.reviewed_at ?? null,
+      reviewed_by_user_id: resolution?.reviewed_by_user_id ?? null
+    };
+  });
 }
 
 export function formatStrategicMetricValue(value: number, unit: StrategicMetricUnit) {

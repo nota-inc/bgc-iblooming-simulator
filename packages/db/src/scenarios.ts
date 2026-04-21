@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 import { prisma } from "./client";
 import { snapshotDefaultRelationSelect } from "./snapshots";
@@ -29,6 +29,11 @@ const scenarioSelect = {
   archivedAt: true,
   archivedByUserId: true,
   archiveReason: true,
+  adoptedBaselineRunId: true,
+  adoptedBaselineJson: true,
+  adoptedBaselineAt: true,
+  adoptedBaselineByUserId: true,
+  adoptedBaselineNote: true,
   createdAt: true,
   updatedAt: true,
   modelVersion: true,
@@ -47,6 +52,13 @@ const scenarioSelect = {
       completedAt: true
     }
   },
+  adoptedBaselineRun: {
+    select: {
+      id: true,
+      status: true,
+      completedAt: true
+    }
+  },
   _count: {
     select: {
       runs: true
@@ -56,11 +68,13 @@ const scenarioSelect = {
 
 export async function listScenarios(options: ScenarioListOptions = {}) {
   return prisma.scenario.findMany({
-    where: options.includeArchived
-      ? undefined
+    ...(options.includeArchived
+      ? {}
       : {
-          archivedAt: null
-        },
+          where: {
+            archivedAt: null
+          }
+        }),
     select: scenarioSelect,
     orderBy: {
       updatedAt: "desc"
@@ -141,6 +155,44 @@ export async function unarchiveScenario(scenarioId: string) {
       archivedAt: null,
       archivedByUserId: null,
       archiveReason: null
+    },
+    select: scenarioSelect
+  });
+}
+
+export async function adoptScenarioBaseline(input: {
+  scenarioId: string;
+  runId: string;
+  adoptedByUserId?: string | null;
+  adoptedBaselineJson: Prisma.InputJsonValue;
+  note?: string | null;
+}) {
+  return prisma.scenario.update({
+    where: {
+      id: input.scenarioId
+    },
+    data: {
+      adoptedBaselineRunId: input.runId,
+      adoptedBaselineJson: input.adoptedBaselineJson,
+      adoptedBaselineAt: new Date(),
+      adoptedBaselineByUserId: input.adoptedByUserId ?? null,
+      adoptedBaselineNote: input.note ?? null
+    },
+    select: scenarioSelect
+  });
+}
+
+export async function clearScenarioAdoptedBaseline(scenarioId: string) {
+  return prisma.scenario.update({
+    where: {
+      id: scenarioId
+    },
+    data: {
+      adoptedBaselineRunId: null,
+      adoptedBaselineJson: Prisma.DbNull,
+      adoptedBaselineAt: null,
+      adoptedBaselineByUserId: null,
+      adoptedBaselineNote: null
     },
     select: scenarioSelect
   });

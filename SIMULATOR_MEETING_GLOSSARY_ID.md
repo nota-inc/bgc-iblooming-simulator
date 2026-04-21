@@ -28,7 +28,7 @@ Prinsip membaca dokumen ini:
 | `importedFactCount` | Jumlah canonical facts aktif yang saat ini tersimpan di sistem. | Ini angka yang paling dekat dengan "berapa data aktif yang benar-benar siap dipakai simulasi sekarang". |
 | `Approve` | Persetujuan akhir agar snapshot bisa dipakai untuk run. | Run tidak bisa jalan jika snapshot belum `APPROVED`. |
 | `Archive` | Menyembunyikan snapshot dari tampilan aktif tanpa menghapus data historis. | Dipakai untuk merapikan registry, bukan menghemat storage secara langsung. |
-| `Storage Cleanup Policy` | Ringkasan kandidat cleanup storage untuk snapshot/import lama. | Ini laporan kandidat cleanup, bukan aksi delete otomatis. |
+| `Storage Cleanup Policy` | Ringkasan kandidat cleanup storage untuk snapshot/import lama. | Ini panel maintenance di bawah daftar snapshot, bukan fokus utama workflow dan bukan aksi delete otomatis. |
 
 ### Status snapshot yang penting
 
@@ -47,6 +47,7 @@ Prinsip membaca dokumen ini:
 - `rowCountRaw` = jumlah row asli di file
 - `rowCountImported` = jumlah row yang lolos import
 - `importedFactCount` = jumlah data aktif yang benar-benar tersimpan
+- `Storage Cleanup Policy` = dibaca belakangan, setelah tim selesai memeriksa registry snapshot aktif
 
 ## Halaman `Run`
 

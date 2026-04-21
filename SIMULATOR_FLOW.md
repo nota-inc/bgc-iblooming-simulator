@@ -54,6 +54,7 @@ The easiest mental model is:
 
    The purpose of this page is to register one historical dataset version that will later be used in simulations.
    Once snapshots accumulate, the team can archive older ones from the default registry view without deleting their historical truth.
+   Storage cleanup stays below the registry as a secondary maintenance panel, so users read active business-truth data first and cleanup candidates later.
 
 4. **Import the dataset**  
    After the snapshot is created, the user clicks **Import facts**.  

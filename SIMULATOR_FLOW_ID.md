@@ -54,6 +54,7 @@ Cara paling gampang memahaminya:
 
    Tujuan halaman ini adalah mendaftarkan satu versi dataset historis yang nanti akan dipakai untuk simulasi.
    Kalau snapshot makin banyak, tim bisa meng-archive snapshot lama dari registry default tanpa menghapus truth historisnya.
+   Storage cleanup ditempatkan di bawah registry sebagai panel maintenance sekunder, supaya user membaca data truth aktif lebih dulu dan kandidat cleanup belakangan.
 
 4. **Import dataset**  
    Setelah snapshot dibuat, user klik **Import facts**.  

@@ -164,7 +164,7 @@ The `Snapshots` screen is where users:
 - run validation
 - approve snapshots for simulation use
 - archive older snapshots from the default registry view
-- review a storage cleanup policy summary without purging data
+- review a storage cleanup policy summary below the snapshot registry, with collapsible maintenance detail and without purging data
 
 ### Scenarios
 

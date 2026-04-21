@@ -29,7 +29,6 @@ export default async function OverviewPage() {
     scenarios,
     runStatusGroups,
     archivedRunCount,
-    importedFactCount,
     latestCompletedRun,
   ] = databaseConfigured
     ? await Promise.all([
@@ -49,7 +48,6 @@ export default async function OverviewPage() {
             }
           }
         }),
-        prisma.snapshotMemberMonthFact.count(),
         prisma.simulationRun.findFirst({
           where: { status: "COMPLETED", archivedAt: null },
           orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }],
@@ -75,7 +73,7 @@ export default async function OverviewPage() {
           },
         }),
       ])
-    : [[], [], [], 0, 0, null];
+    : [[], [], [], 0, null];
 
   const approvedSnapshots = snapshots.filter(
     (s) => !s.archivedAt && s.validationStatus === "APPROVED"
@@ -135,7 +133,7 @@ export default async function OverviewPage() {
         <Card className="span-4" title="Snapshots" variant="metric">
           <p className="metric">{formatCount(snapshots.length)}</p>
           <p className="metric-sub">
-            {approvedSnapshots} approved · {importedSnapshots} imported · {archivedSnapshots} archived · {formatCount(importedFactCount)} rows
+            {approvedSnapshots} approved · {importedSnapshots} imported · {archivedSnapshots} archived
           </p>
         </Card>
 

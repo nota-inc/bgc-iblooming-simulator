@@ -112,6 +112,14 @@ type ScenarioRecord = {
     archivedAt: string | null;
   } | null;
   latestRun: { id: string; status: string; } | null;
+  adoptedBaselineRunId: string | null;
+  adoptedBaselineAt: string | null;
+  adoptedBaselineNote: string | null;
+  adoptedBaselineRun: {
+    id: string;
+    status: string;
+    completedAt: string | null;
+  } | null;
   runCount: number;
   archivedAt: string | null;
   updatedAt: string;
@@ -1184,6 +1192,14 @@ export function ScenarioConsole({ scenarios, snapshots, baselineModels, user }: 
                 ) : (
                   <p className="muted" style={{ fontSize: "0.75rem", margin: "0 0 0.5rem", color: "var(--status-risky)" }}>No snapshot attached</p>
                 )}
+                {scenario.adoptedBaselineRun ? (
+                  <p className="muted" style={{ fontSize: "0.75rem", margin: "0 0 0.5rem" }}>
+                    <span className="badge badge--info" style={{ fontSize: "0.6rem", marginRight: "0.3rem" }}>Pilot Baseline</span>
+                    Ref {getRunReference(scenario.adoptedBaselineRun.id)}
+                    {scenario.adoptedBaselineAt ? ` · adopted ${new Date(scenario.adoptedBaselineAt).toLocaleString("en-US")}` : ""}
+                    {scenario.adoptedBaselineNote ? ` · ${scenario.adoptedBaselineNote}` : ""}
+                  </p>
+                ) : null}
                 <div className="action-row">
                   <button className="ghost-button" disabled={!canWrite} onClick={() => startEdit(scenario)} type="button" style={{ fontSize: "0.78rem", padding: "0.35rem 0.65rem" }}>Edit</button>
                   {scenario.latestRun ? (
