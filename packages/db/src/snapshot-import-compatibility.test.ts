@@ -187,6 +187,7 @@ test("full detail CSV sample derives facts that pass understanding_doc_strict va
   });
 
   assert.equal(payload.members.length, 1);
+  assert.equal(payload.member_aliases.length, 1);
   assert.equal(payload.business_events.length, 6);
   assert.equal(payload.reward_obligations.length, 1);
   assert.equal(payload.pool_entries.length, 2);

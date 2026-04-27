@@ -26,7 +26,8 @@ import {
   getScenarioModeCaveat,
   getScenarioModeLabel,
   getSetupStatusLabel,
-  getTruthClassificationLabel
+  getTruthClassificationLabel,
+  simplifyResultText
 } from "@/lib/common-language";
 import {
   formatStrategicMetricValue,
@@ -85,10 +86,10 @@ const cashflowBasisMetricKeys = [
 ] as const;
 
 const cashflowBasisMetricLabels: Record<(typeof cashflowBasisMetricKeys)[number], string> = {
-  company_actual_payout_out_total: "Actual Payout Out",
-  company_gross_cash_in_total: "Gross Cash In",
-  company_net_treasury_delta_total: "Net Treasury Delta",
-  company_retained_revenue_total: "Retained Revenue",
+  company_actual_payout_out_total: "Cash Paid Out",
+  company_gross_cash_in_total: "Cash In",
+  company_net_treasury_delta_total: "Net Cash Change",
+  company_retained_revenue_total: "Revenue Kept",
   payout_inflow_ratio: "Treasury Pressure",
   reserve_runway_months: "Reserve Runway"
 };
@@ -166,7 +167,7 @@ export default async function DecisionPackPage({
   return (
     <>
       <RunStatusRefresh active={refreshActive} inlineResumeEnabled={inlineResumeEnabled} runId={run.id} />
-      <PageHeader eyebrow="Decision Pack" title={`Decision Pack · ${getRunReference(runId)}`} description="Founder-facing evaluation output from this simulation run." />
+      <PageHeader eyebrow="Decision Pack" title={`Decision Pack · ${getRunReference(runId)}`} description="Decision output for this simulation result." />
 
       {/* Tab nav */}
       <nav className="tab-nav">
@@ -190,14 +191,14 @@ export default async function DecisionPackPage({
 
         {decisionPack ? (
           <>
-            {/* Founder decision summary */}
-            <Card className="span-12" title="Founder Decision Summary">
+            {/* Decision summary */}
+            <Card className="span-12" title="Decision Summary">
               <div className="decision-summary">
                 <div className="decision-summary__verdict">
                   <span className="verdict-label" data-status={getVerdictStatus(decisionPack.policy_status)}>
                     {getPolicyStatusLabel(decisionPack.policy_status)}
                   </span>
-                  <p>{decisionPack.recommendation}</p>
+                  <p>{simplifyResultText(decisionPack.recommendation)}</p>
                   {scenarioModeCaveat ? (
                     <p className="muted" style={{ marginTop: "0.5rem" }}>
                       {scenarioModeCaveat}
@@ -214,7 +215,7 @@ export default async function DecisionPackPage({
                     <strong>{run.snapshot.name}</strong>
                   </div>
                   <div>
-                    <span>Rule Set</span>
+                    <span>Rules</span>
                     <strong>{run.modelVersion.versionName}</strong>
                   </div>
                   <div>
@@ -222,7 +223,7 @@ export default async function DecisionPackPage({
                     <strong>{getScenarioModeLabel(scenarioParameters.scenario_mode)}</strong>
                   </div>
                   <div>
-                    <span>Horizon</span>
+                    <span>Time Range</span>
                     <strong>{formatPlanningHorizonLabel(scenarioParameters.projection_horizon_months)}</strong>
                   </div>
                 </div>
@@ -230,8 +231,8 @@ export default async function DecisionPackPage({
             </Card>
 
             {tokenFlowEvidence ? (
-              <Card className="span-12" title="Token Flow Evidence">
-                <p className="card-intro">{tokenFlowEvidence.summary}</p>
+              <Card className="span-12" title="ALPHA Evidence">
+                <p className="card-intro">{simplifyResultText(tokenFlowEvidence.summary)}</p>
                 <div className="table-wrap">
                   <table>
                     <thead>
@@ -245,12 +246,12 @@ export default async function DecisionPackPage({
                     <tbody>
                       {tokenFlowEvidence.rows.map((row) => (
                         <tr key={row.key}>
-                          <td>{row.label}</td>
+                          <td>{simplifyResultText(row.label)}</td>
                           <td>
                             <span className={`badge ${getTokenFlowEvidenceBadge(row.status)}`}>{row.status}</span>
                           </td>
-                          <td>{row.value}</td>
-                          <td>{row.detail}</td>
+                          <td>{simplifyResultText(row.value)}</td>
+                          <td>{simplifyResultText(row.detail)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -259,17 +260,17 @@ export default async function DecisionPackPage({
                 {tokenFlowEvidence.caveats.length > 0 ? (
                   <ul className="compact-list">
                     {tokenFlowEvidence.caveats.map((caveat) => (
-                      <li key={caveat}>{caveat}</li>
+                      <li key={caveat}>{simplifyResultText(caveat)}</li>
                     ))}
                   </ul>
                 ) : null}
               </Card>
             ) : null}
 
-            {/* Cashflow basis */}
-            <Card className="span-12" title="Cashflow Basis">
+            {/* Money basis */}
+            <Card className="span-12" title="Money Basis">
               <p className="card-intro">
-                Founder-facing cashflow evidence behind this recommendation. Fiat and cashflow values are shown in $.
+                Money evidence behind this recommendation. Dollar values are shown in USD.
               </p>
               <div className="decision-kpi-grid">
                 {cashflowBasisMetrics.map((metric) => (
@@ -281,9 +282,9 @@ export default async function DecisionPackPage({
               </div>
             </Card>
 
-            <Card className="span-12" title="Imported Data Coverage">
+            <Card className="span-12" title="Data Completeness">
               <p className="card-intro">
-                Summary of how complete the imported data is behind this run.
+                Shows how complete the uploaded data is behind this result.
               </p>
               {historicalTruthCoverage ? (
                 <>
@@ -292,22 +293,22 @@ export default async function DecisionPackPage({
                       <span className={`badge ${getCoverageBadge(historicalTruthCoverage.status)}`}>
                         {getHistoricalTruthCoverageLabel(historicalTruthCoverage.status)}
                       </span>
-                      <p style={{ marginTop: "0.75rem" }}>{historicalTruthCoverage.summary}</p>
+                      <p style={{ marginTop: "0.75rem" }}>{simplifyResultText(historicalTruthCoverage.summary)}</p>
                     </div>
                   </div>
                   <div className="table-wrap" style={{ marginTop: "1rem" }}>
                     <table className="table">
-                      <thead><tr><th>Coverage Layer</th><th>Status</th><th>Detail</th></tr></thead>
+                      <thead><tr><th>Data Area</th><th>Status</th><th>Detail</th></tr></thead>
                       <tbody>
                         {historicalTruthCoverage.rows.map((row) => (
                           <tr key={row.key}>
-                            <td><strong>{row.label}</strong></td>
+                            <td><strong>{simplifyResultText(row.label)}</strong></td>
                             <td>
                               <span className={`badge ${getCoverageBadge(row.status)}`}>
                                 {getHistoricalTruthCoverageLabel(row.status)}
                               </span>
                             </td>
-                            <td>{row.detail}</td>
+                            <td>{simplifyResultText(row.detail)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -319,23 +320,23 @@ export default async function DecisionPackPage({
               )}
             </Card>
 
-            <Card className="span-12" title="Recommended Pilot Envelope">
+            <Card className="span-12" title="Recommended Setup">
               <p className="card-intro">
-                Recommended setup from this run. Imported data stays fixed; only policy choices and assumptions change.
+                Recommended setup from this result. Uploaded data stays fixed; only policy choices and assumptions change.
               </p>
               {recommendedSetup ? (
                 <>
                   <div className="decision-baseline-layout">
                     <div className="decision-summary">
                       <div className="decision-summary__verdict">
-                        <span className="badge badge--candidate">{recommendedSetup.title}</span>
-                        <p style={{ marginTop: "0.75rem" }}>{recommendedSetup.summary}</p>
+                        <span className="badge badge--candidate">{simplifyResultText(recommendedSetup.title)}</span>
+                        <p style={{ marginTop: "0.75rem" }}>{simplifyResultText(recommendedSetup.summary)}</p>
                         <p className="muted" style={{ marginTop: "0.5rem" }}>
                           {isAdoptedBaseline
-                            ? `This run is the current adopted pilot baseline for ${run.scenario.name}.`
+                            ? `This result is the current pilot baseline for ${run.scenario.name}.`
                             : run.scenario.adoptedBaselineRunId
-                              ? `Another run is currently adopted as the pilot baseline for ${run.scenario.name}.`
-                              : `No adopted pilot baseline is locked yet for ${run.scenario.name}.`}
+                              ? `Another result is currently the pilot baseline for ${run.scenario.name}.`
+                              : `No pilot baseline is selected yet for ${run.scenario.name}.`}
                         </p>
                         {run.scenario.adoptedBaselineAt ? (
                           <p className="muted" style={{ marginTop: "0.25rem" }}>
@@ -349,18 +350,18 @@ export default async function DecisionPackPage({
                       <div className="decision-baseline-panel__header">
                         <div>
                           <span className={`badge ${isAdoptedBaseline ? "badge--candidate" : "badge--neutral"}`}>
-                            {isAdoptedBaseline ? "Current Pilot Baseline" : "Governance Action"}
+                            {isAdoptedBaseline ? "Current Pilot Baseline" : "Action Needed"}
                           </span>
-                          <h4>Pilot Baseline Lock</h4>
+                          <h4>Pilot Baseline</h4>
                         </div>
                       </div>
                       <p className="card-intro">
-                        Promote this recommendation from “best current run” into the current pilot baseline for the scenario.
+                        Make this result the current pilot baseline for the scenario.
                       </p>
                       <p className="muted">
                         {isAdoptedBaseline
-                          ? "This run is already adopted as the current pilot baseline. Clear it only if you intentionally want to reopen baseline selection."
-                          : "Adopt this run only when you want its setup to become the default pilot reference for founder-facing discussion."}
+                          ? "This result is already the current pilot baseline. Clear it only if you want to reopen baseline selection."
+                          : "Use this result only when its setup should become the default pilot reference for team discussion."}
                       </p>
                       <RecommendedBaselineControls
                         canWrite={canWriteScenarios}
@@ -372,18 +373,18 @@ export default async function DecisionPackPage({
                   </div>
                   <div className="table-wrap" style={{ marginTop: "1rem" }}>
                     <table className="table">
-                      <thead><tr><th>Setup Item</th><th>Value</th><th>Status</th><th>Rationale</th></tr></thead>
+                      <thead><tr><th>Setup Item</th><th>Value</th><th>Status</th><th>Why</th></tr></thead>
                       <tbody>
                         {recommendedSetup.items.map((item) => (
                           <tr key={item.parameter_key}>
-                            <td><strong>{item.label}</strong></td>
-                            <td>{item.value}</td>
+                            <td><strong>{simplifyResultText(item.label)}</strong></td>
+                            <td>{simplifyResultText(item.value)}</td>
                             <td>
                               <span className={`badge ${item.status === "recommended" ? "badge--candidate" : item.status === "caution" ? "badge--risky" : "badge--neutral"}`}>
                                 {getSetupStatusLabel(item.status)}
                               </span>
                             </td>
-                            <td>{item.rationale}</td>
+                            <td>{simplifyResultText(item.rationale)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -394,7 +395,7 @@ export default async function DecisionPackPage({
                       <h4 style={{ marginBottom: "0.5rem" }}>Warnings</h4>
                       <ul className="issue-list">
                         {recommendedSetup.warnings.map((warning) => (
-                          <li key={warning}>{warning}</li>
+                          <li key={warning}>{simplifyResultText(warning)}</li>
                         ))}
                       </ul>
                     </div>
@@ -405,9 +406,9 @@ export default async function DecisionPackPage({
               )}
             </Card>
 
-            <Card className="span-12" title="Canonical Fidelity Audit">
+            <Card className="span-12" title="Source Detail Check">
               <p className="card-intro">
-                Fidelity audit for rule families that still need stronger canonical/event-native closure before outputs are treated as final lock inputs.
+                Shows which source details are available and which still need stronger data before final claims are made.
               </p>
               {canonicalGapAudit ? (
                 <>
@@ -416,22 +417,22 @@ export default async function DecisionPackPage({
                       <span className={`badge ${getCoverageBadge(canonicalGapAudit.readiness)}`}>
                         {getHistoricalTruthCoverageLabel(canonicalGapAudit.readiness)}
                       </span>
-                      <p style={{ marginTop: "0.75rem" }}>{canonicalGapAudit.summary}</p>
+                      <p style={{ marginTop: "0.75rem" }}>{simplifyResultText(canonicalGapAudit.summary)}</p>
                     </div>
                   </div>
                   <div className="table-wrap" style={{ marginTop: "1rem" }}>
                     <table className="table">
-                      <thead><tr><th>Rule Family</th><th>Status</th><th>Detail</th></tr></thead>
+                      <thead><tr><th>Source Area</th><th>Status</th><th>Detail</th></tr></thead>
                       <tbody>
                         {canonicalGapAudit.rows.map((row) => (
                           <tr key={row.key}>
-                            <td><strong>{row.label}</strong></td>
+                            <td><strong>{simplifyResultText(row.label)}</strong></td>
                             <td>
                               <span className={`badge ${getCoverageBadge(row.status)}`}>
                                 {getCanonicalGapStatusLabel(row.status)}
                               </span>
                             </td>
-                            <td>{row.detail}</td>
+                            <td>{simplifyResultText(row.detail)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -439,24 +440,24 @@ export default async function DecisionPackPage({
                   </div>
                 </>
               ) : (
-                <p className="muted">No canonical fidelity audit recorded yet.</p>
+                <p className="muted">No source detail check recorded yet.</p>
               )}
             </Card>
 
-            <Card className="span-12" title="Decision Log">
+            <Card className="span-12" title="Decision Notes">
               <p className="card-intro">
                 Separates fixed data, current recommendations, and decisions that still need follow-up.
               </p>
               {decisionLog.length === 0 ? (
-                <p className="muted">No structured decision log recorded yet.</p>
+                <p className="muted">No review saved yet.</p>
               ) : (
                 <div className="table-wrap">
                   <table className="table">
-                    <thead><tr><th>Decision Item</th><th>Generated Status</th><th>Governance State</th><th>Owner</th><th>Rationale / Resolution</th></tr></thead>
+                    <thead><tr><th>Decision Item</th><th>Suggested Status</th><th>Review Status</th><th>Owner</th><th>Reason / Decision Note</th></tr></thead>
                     <tbody>
                       {decisionLog.map((entry) => (
                         <tr key={entry.key}>
-                          <td><strong>{entry.title}</strong></td>
+                          <td><strong>{simplifyResultText(entry.title)}</strong></td>
                           <td>
                             <span className={`badge ${getDecisionLogBadge(entry.status)}`}>
                               {getDecisionLogStatusLabel(entry.status)}
@@ -472,7 +473,7 @@ export default async function DecisionPackPage({
                                   Reviewed {new Date(entry.reviewed_at).toLocaleString("en-US")}
                                 </span>
                               ) : (
-                                <span className="muted">No governance review saved yet.</span>
+                                <span className="muted">No review saved yet.</span>
                               )}
                               <DecisionLogGovernanceControl
                                 canWrite={canWriteRuns}
@@ -484,13 +485,13 @@ export default async function DecisionPackPage({
                               />
                             </div>
                           </td>
-                          <td>{entry.governance_owner || "Unassigned"}</td>
+                          <td>{simplifyResultText(entry.governance_owner || "Unassigned")}</td>
                           <td>
                             <div className="decision-log-rationale">
-                              <span>{entry.rationale}</span>
+                              <span>{simplifyResultText(entry.rationale)}</span>
                               {entry.resolution_note ? (
                                 <span className="muted">
-                                  Resolution note: {entry.resolution_note}
+                                  Decision note: {simplifyResultText(entry.resolution_note)}
                                 </span>
                               ) : null}
                             </div>
@@ -505,7 +506,7 @@ export default async function DecisionPackPage({
 
             <Card className="span-12" title="Data vs Assumptions">
               <p className="card-intro">
-                Separates imported data, editable values, assumptions, locked limits, and calculated results.
+                Shows which values come from uploaded data, which are editable, and which are assumptions or calculated outputs.
               </p>
               {truthAssumptionMatrix.length === 0 ? (
                 <p className="muted">No data vs assumptions matrix yet.</p>
@@ -516,14 +517,14 @@ export default async function DecisionPackPage({
                     <tbody>
                       {truthAssumptionMatrix.map((item) => (
                         <tr key={item.key}>
-                          <td><strong>{item.label}</strong></td>
+                          <td><strong>{simplifyResultText(item.label)}</strong></td>
                           <td>
                             <span className={`badge ${getTruthClassificationBadge(item.classification)}`}>
                               {getTruthClassificationLabel(item.classification)}
                             </span>
                           </td>
-                          <td>{item.value}</td>
-                          <td>{item.note}</td>
+                          <td>{simplifyResultText(item.value)}</td>
+                          <td>{simplifyResultText(item.note)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -532,23 +533,23 @@ export default async function DecisionPackPage({
               )}
             </Card>
 
-            {/* Strategic Goals */}
-            <Card className="span-12" title="Strategic Goals">
+            {/* Goal Details */}
+            <Card className="span-12" title="Goal Details">
               {strategicObjectives.length === 0 ? (
                 <p className="muted">No goal scorecards saved yet.</p>
               ) : (
                 <div className="table-wrap">
                   <table className="table">
-                    <thead><tr><th>Objective</th><th>Assessment</th><th>Evidence</th><th>Score</th><th>Primary Metrics</th><th>Reasons</th></tr></thead>
+                    <thead><tr><th>Goal</th><th>Status</th><th>Data Support</th><th>Score</th><th>Main Metrics</th><th>Why</th></tr></thead>
                     <tbody>
                       {strategicObjectives.map((obj) => (
                         <tr key={obj.objective_key}>
-                          <td>{obj.label}</td>
+                          <td>{simplifyResultText(obj.label)}</td>
                           <td><span className={`badge badge--${obj.status === "candidate" ? "candidate" : obj.status === "risky" ? "risky" : "rejected"}`}>{getPolicyStatusLabel(obj.status)}</span></td>
                           <td>{getEvidenceLevelLabel(obj.evidence_level)}</td>
                           <td style={{ fontWeight: 600 }}>{obj.score.toFixed(2)}</td>
-                          <td><ul className="issue-list">{obj.primary_metrics.map((m) => <li key={`${obj.objective_key}-${m.metric_key}`}>{m.label}: {formatStrategicMetricValue(m.value, m.unit)}</li>)}</ul></td>
-                          <td><ul className="issue-list">{obj.reasons.map((reason) => <li key={`${obj.objective_key}-${reason}`}>{reason}</li>)}</ul></td>
+                          <td><ul className="issue-list">{obj.primary_metrics.map((m) => <li key={`${obj.objective_key}-${m.metric_key}`}>{simplifyResultText(m.label)}: {formatStrategicMetricValue(m.value, m.unit)}</li>)}</ul></td>
+                          <td><ul className="issue-list">{obj.reasons.map((reason) => <li key={`${obj.objective_key}-${reason}`}>{simplifyResultText(reason)}</li>)}</ul></td>
                         </tr>
                       ))}
                     </tbody>
@@ -557,24 +558,24 @@ export default async function DecisionPackPage({
               )}
             </Card>
 
-            {/* Milestones */}
-            <Card className="span-12" title="Milestone Checkpoints">
+            {/* Phase checkpoints */}
+            <Card className="span-12" title="Phase Checkpoints">
               {milestoneEvaluations.length === 0 ? (
-                <p className="muted">No milestone results saved yet.</p>
+                <p className="muted">No phase results saved yet.</p>
               ) : (
                 <div className="table-wrap">
                   <table className="table">
-                    <thead><tr><th>Milestone</th><th>Assessment</th><th>Pressure</th><th>Runway</th><th>Top 10%</th><th>Net Treasury Delta</th><th>Reasons</th></tr></thead>
+                    <thead><tr><th>Phase</th><th>Status</th><th>Pressure</th><th>Runway</th><th>Top 10%</th><th>Net Cash Change</th><th>Why</th></tr></thead>
                     <tbody>
                       {milestoneEvaluations.map((ms) => (
                         <tr key={ms.milestone_key}>
-                          <td><strong>{ms.label}</strong><div className="muted" style={{ fontSize: "0.75rem" }}>{ms.start_period_key} → {ms.end_period_key}</div></td>
+                          <td><strong>{simplifyResultText(ms.label)}</strong><div className="muted" style={{ fontSize: "0.75rem" }}>{ms.start_period_key} → {ms.end_period_key}</div></td>
                           <td><span className={`badge badge--${ms.policy_status === "candidate" ? "candidate" : ms.policy_status === "risky" ? "risky" : "rejected"}`}>{getPolicyStatusLabel(ms.policy_status)}</span></td>
                           <td style={{ fontWeight: 600 }}>{formatCommonMetricValue("payout_inflow_ratio", ms.summary_metrics.payout_inflow_ratio)}</td>
                           <td>{formatCommonMetricValue("reserve_runway_months", ms.summary_metrics.reserve_runway_months)}</td>
                           <td>{formatCommonMetricValue("reward_concentration_top10_pct", ms.summary_metrics.reward_concentration_top10_pct)}</td>
                           <td style={{ fontWeight: 600 }}>{formatCommonMetricValue("company_net_treasury_delta_total", ms.summary_metrics.company_net_treasury_delta_total)}</td>
-                          <td><ul className="issue-list">{ms.reasons.map((r) => <li key={`${ms.milestone_key}-${r}`}>{r}</li>)}</ul></td>
+                          <td><ul className="issue-list">{ms.reasons.map((r) => <li key={`${ms.milestone_key}-${r}`}>{simplifyResultText(r)}</li>)}</ul></td>
                         </tr>
                       ))}
                     </tbody>
@@ -584,51 +585,51 @@ export default async function DecisionPackPage({
             </Card>
 
             {/* Scenario evidence vs blockers */}
-            <Card className="span-8" title="Evaluated Scenario Basis" variant="status" statusColor="candidate">
+            <Card className="span-8" title="Settings Used" variant="status" statusColor="candidate">
               {decisionPack.preferred_settings.length === 0 ? <p className="muted">None.</p> : (
                 <ul className="issue-list">
                   {decisionPack.preferred_settings.map((item) => (
-                    <li key={item} style={{ color: "var(--status-candidate)" }}>{item}</li>
+                    <li key={item} style={{ color: "var(--status-candidate)" }}>{simplifyResultText(item)}</li>
                   ))}
                 </ul>
               )}
             </Card>
 
-            <Card className="span-4" title="Blockers / Rejection Reasons" variant="status" statusColor="rejected">
-              {decisionPack.rejected_settings.length === 0 ? <p className="muted">No blockers found for this scenario.</p> : (
+            <Card className="span-4" title="Blockers" variant="status" statusColor="rejected">
+              {decisionPack.rejected_settings.length === 0 ? <p className="muted">No blockers found for this result.</p> : (
                 <ul className="issue-list">
                   {decisionPack.rejected_settings.map((item) => (
-                    <li key={item} style={{ color: "var(--status-rejected)" }}>{item}</li>
+                    <li key={item} style={{ color: "var(--status-rejected)" }}>{simplifyResultText(item)}</li>
                   ))}
                 </ul>
               )}
             </Card>
 
             {/* Unresolved */}
-            <Card className="span-8" title="Unresolved Questions">
+            <Card className="span-8" title="Open Questions">
               {decisionPack.unresolved_questions.length === 0 ? <p className="muted">None.</p> : (
                 <ul className="issue-list">
                   {decisionPack.unresolved_questions.map((item) => (
-                    <li key={item}>{item}</li>
+                    <li key={item}>{simplifyResultText(item)}</li>
                   ))}
                 </ul>
               )}
             </Card>
 
             {/* Exports */}
-            <Card className="span-4" title="Export Full Simulation Report">
+            <Card className="span-4" title="Export Report">
               <p className="card-intro">
-                Downloads the full run report: Summary, Treasury, Distribution, and Decision Pack.
+                Download this result as report files.
               </p>
               <div className="stack-links" style={{ marginTop: "0.75rem" }}>
                 <a href={`/api/runs/${run.id}/decision-pack/export?format=markdown`}>
-                  Download Full Markdown
+                  Download Markdown
                 </a>
                 <a href={`/api/runs/${run.id}/decision-pack/export?format=csv`}>
-                  Download Full CSV
+                  Download CSV
                 </a>
                 <a href={`/api/runs/${run.id}/decision-pack/export?format=pdf`}>
-                  Download Full PDF
+                  Download PDF
                 </a>
               </div>
             </Card>

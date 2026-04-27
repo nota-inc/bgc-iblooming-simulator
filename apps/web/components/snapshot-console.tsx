@@ -280,6 +280,13 @@ function formatCleanupDate(value: string | null | undefined) {
   return parsed.toISOString().slice(0, 10);
 }
 
+function getDownloadFilename(response: Response, fallback: string) {
+  const contentDisposition = response.headers.get("content-disposition");
+  const filenameMatch = contentDisposition?.match(/filename="([^"]+)"/i);
+
+  return filenameMatch?.[1] ?? fallback;
+}
+
 export function SnapshotConsole({ snapshots, blobUploadsEnabled, cleanupReport, user }: SnapshotConsoleProps) {
   const router = useRouter();
   const [formState, setFormState] = useState(defaultFormState);
@@ -412,6 +419,49 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, cleanupReport, 
         : `${snapshot.name} archived from the default snapshot list.`
     );
     router.refresh();
+  }
+
+  async function downloadSnapshotExport(
+    snapshot: SnapshotRecord,
+    exportFormat: "monthly_csv" | "full_detail_csv"
+  ) {
+    setMessage(null);
+
+    const url =
+      exportFormat === "full_detail_csv"
+        ? `/api/snapshots/${snapshot.id}/export?format=full_detail_csv`
+        : `/api/snapshots/${snapshot.id}/export`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string; message?: string } | null;
+      const fallbackMessage =
+        exportFormat === "full_detail_csv"
+          ? `${snapshot.name} has no full-detail source rows yet. Use Monthly CSV, or re-import a Full Detail CSV source.`
+          : `${snapshot.name} has no monthly rows to export.`;
+
+      setMessage(payload?.message ?? fallbackMessage);
+      return;
+    }
+
+    const blob = await response.blob();
+    const objectUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = getDownloadFilename(
+      response,
+      exportFormat === "full_detail_csv" ? `${snapshot.name}-full-detail.csv` : `${snapshot.name}-monthly.csv`
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(objectUrl);
+
+    setMessage(
+      exportFormat === "full_detail_csv"
+        ? `Full-detail CSV export started for ${snapshot.name}.`
+        : `Monthly CSV export started for ${snapshot.name}.`
+    );
   }
 
   return (
@@ -950,13 +1000,9 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, cleanupReport, 
                       className="ghost-button snapshot-export-btn"
                       disabled={isPending}
                       onClick={() => {
-                        const link = document.createElement("a");
-                        link.href = `/api/snapshots/${snapshot.id}/export`;
-                        link.download = "";
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        setMessage(`Exporting data for ${snapshot.name}...`);
+                        startTransition(async () => {
+                          await downloadSnapshotExport(snapshot, "monthly_csv");
+                        });
                       }}
                       type="button"
                     >
@@ -965,19 +1011,15 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, cleanupReport, 
                         <polyline points="7 10 12 15 17 10" />
                         <line x1="12" y1="15" x2="12" y2="3" />
                       </svg>
-                      Export Data
+                      Export Monthly CSV
                     </button>
                     <button
                       className="ghost-button snapshot-export-btn"
                       disabled={isPending}
                       onClick={() => {
-                        const link = document.createElement("a");
-                        link.href = `/api/snapshots/${snapshot.id}/export?format=canonical`;
-                        link.download = "";
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        setMessage(`Exporting full-detail data for ${snapshot.name}...`);
+                        startTransition(async () => {
+                          await downloadSnapshotExport(snapshot, "full_detail_csv");
+                        });
                       }}
                       type="button"
                     >
@@ -986,7 +1028,7 @@ export function SnapshotConsole({ snapshots, blobUploadsEnabled, cleanupReport, 
                         <polyline points="7 10 12 15 17 10" />
                         <line x1="12" y1="15" x2="12" y2="3" />
                       </svg>
-                      Export Full Detail
+                      Export Full Detail CSV
                     </button>
                   </div>
                 ) : null}

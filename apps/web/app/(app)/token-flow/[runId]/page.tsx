@@ -13,7 +13,8 @@ import {
   getCommonMetricLabel,
   getRunReference,
   getScenarioModeCaveat,
-  getScenarioModeLabel
+  getScenarioModeLabel,
+  simplifyResultText
 } from "@/lib/common-language";
 import { readTokenFlowEvidence } from "@/lib/strategic-objectives";
 
@@ -29,7 +30,11 @@ const ledgerMetricKeys = [
 ] as const;
 
 function formatTokenPolicyValue(value: string) {
-  return value.replace(/_/g, " ");
+  return value
+    .replace(/_/g, " ")
+    .replace(/founder/g, "team")
+    .replace(/not applicable internal/g, "not applicable for internal ALPHA")
+    .replace(/alpha internal/g, "internal ALPHA");
 }
 
 function buildPeriodRows(timeSeries: NonNullable<Awaited<ReturnType<typeof getRunById>>>["timeSeries"]) {
@@ -96,7 +101,7 @@ export default async function TokenFlowPage({
       <PageHeader
         eyebrow="Token Flow"
         title={`Token Flow · ${getRunReference(runId)}`}
-        description="ALPHA spec lock, balance ledger, forecast separation, Web3 tokenomics assumptions, and evidence-pack caveats."
+        description="ALPHA policy, monthly balance ledger, forecast split, Web3 assumptions, and whitepaper evidence."
       />
 
       <nav className="tab-nav">
@@ -108,20 +113,20 @@ export default async function TokenFlowPage({
       </nav>
 
       <section className="page-grid">
-        <Card className="span-12" title="Scenario Mode">
+        <Card className="span-12" title="Result Mode">
           <div className="decision-summary">
             <div className="decision-summary__verdict">
               <span className={`badge ${parameters.scenario_mode === "advanced_forecast" ? "badge--risky" : "badge--info"}`}>
                 {getScenarioModeLabel(parameters.scenario_mode)}
               </span>
               <p style={{ marginTop: "0.75rem" }}>
-                {scenarioModeCaveat ?? "Imported Data Only does not create growth forecasts. Results are read from imported data."}
+                {scenarioModeCaveat ?? "Imported Data Only uses uploaded data and does not add growth forecasts."}
               </p>
             </div>
           </div>
         </Card>
 
-        <Card className="span-12" title="P1 Token Flow Spec Lock">
+        <Card className="span-12" title="ALPHA Policy">
           <div className="decision-kpi-grid">
             <div className="decision-kpi">
               <span>Classification</span>
@@ -142,9 +147,9 @@ export default async function TokenFlowPage({
           </div>
         </Card>
 
-        <Card className="span-12" title="P2 Token Flow Ledger">
+        <Card className="span-12" title="ALPHA Ledger">
           <p className="card-intro">
-            Period balance ledger: opening balance + issued - used - cash-out - expired/burned = ending balance.
+            Ledger check: opening balance + issued - used - cash-out - expired/burned = ending balance.
           </p>
           <div className="table-wrap">
             <table>
@@ -161,7 +166,7 @@ export default async function TokenFlowPage({
                 {periodRows.map((row) => (
                   <tr key={row.periodKey}>
                     <td>{row.periodKey}</td>
-                    <td>{row.isProjected ? "Forecast" : "Actual"}</td>
+                    <td>{row.isProjected ? "Forecast" : "Uploaded Data"}</td>
                     {ledgerMetricKeys.map((key) => (
                       <td key={key}>{formatCommonMetricValue(key, row.metrics.get(key) ?? 0)}</td>
                     ))}
@@ -172,52 +177,52 @@ export default async function TokenFlowPage({
           </div>
         </Card>
 
-        <Card className="span-6" title="P3 Forecast Layer">
+        <Card className="span-6" title="Forecast Settings">
           <div className="decision-kpi-grid decision-kpi-grid--two">
             <div className="decision-kpi">
-              <span>Actual Periods</span>
+              <span>Observed Months</span>
               <strong>{actualPeriods}</strong>
             </div>
             <div className="decision-kpi">
-              <span>Projected Periods</span>
+              <span>Forecast Months</span>
               <strong>{projectedPeriods}</strong>
             </div>
             <div className="decision-kpi">
-              <span>Actual Sink Use</span>
+              <span>Actual ALPHA Used</span>
               <strong>{formatCommonMetricValue("alpha_actual_spent_total", summaryByKey.get("alpha_actual_spent_total") ?? 0)}</strong>
             </div>
             <div className="decision-kpi">
-              <span>Modeled Sink Use</span>
+              <span>Modeled ALPHA Used</span>
               <strong>{formatCommonMetricValue("alpha_modeled_spent_total", summaryByKey.get("alpha_modeled_spent_total") ?? 0)}</strong>
             </div>
           </div>
           <dl className="detail-list">
             <div><dt>Mode</dt><dd>{formatTokenPolicyValue(forecastPolicy.mode)}</dd></div>
             <div><dt>Basis</dt><dd>{formatTokenPolicyValue(forecastPolicy.forecast_basis)}</dd></div>
-            <div><dt>Actuals Through</dt><dd>{forecastPolicy.actuals_through_period ?? "not set"}</dd></div>
-            <div><dt>Forecast Start</dt><dd>{forecastPolicy.forecast_start_period ?? "not set"}</dd></div>
-            <div><dt>Sink Adoption</dt><dd>{sinkAdoption.sink_adoption_rate_pct}% adoption · {sinkAdoption.eligible_member_share_pct}% eligible</dd></div>
-            <div><dt>Sink Demand</dt><dd>${sinkAdoption.avg_sink_ticket_usd} ticket · {sinkAdoption.sink_frequency_per_month}/mo · {sinkAdoption.alpha_payment_share_pct}% ALPHA</dd></div>
-            <div><dt>Sink Growth</dt><dd>{sinkAdoption.sink_growth_rate_pct}% / month</dd></div>
+            <div><dt>Uploaded Data Through</dt><dd>{forecastPolicy.actuals_through_period ?? "Not set"}</dd></div>
+            <div><dt>Forecast Start</dt><dd>{forecastPolicy.forecast_start_period ?? "Not set"}</dd></div>
+            <div><dt>Internal Use Adoption</dt><dd>{sinkAdoption.sink_adoption_rate_pct}% adoption · {sinkAdoption.eligible_member_share_pct}% eligible</dd></div>
+            <div><dt>Internal Use Demand</dt><dd>${sinkAdoption.avg_sink_ticket_usd} ticket · {sinkAdoption.sink_frequency_per_month}/month · {sinkAdoption.alpha_payment_share_pct}% ALPHA</dd></div>
+            <div><dt>Internal Use Growth</dt><dd>{sinkAdoption.sink_growth_rate_pct}% / month</dd></div>
           </dl>
         </Card>
 
-        <Card className="span-6" title="P4 Web3 Tokenomics Extension">
+        <Card className="span-6" title="Web3 Assumptions">
           <dl className="detail-list">
             <div><dt>Network</dt><dd>{formatTokenPolicyValue(web3.network_status)}</dd></div>
             <div><dt>Supply Model</dt><dd>{formatTokenPolicyValue(web3.supply_model)}</dd></div>
-            <div><dt>Max Supply</dt><dd>{web3.max_supply ?? "not set"}</dd></div>
+            <div><dt>Max Supply</dt><dd>{web3.max_supply ?? "Not set"}</dd></div>
             <div><dt>Liquidity</dt><dd>{web3.liquidity.enabled ? "enabled" : "not enabled"}</dd></div>
-            <div><dt>Governance</dt><dd>{formatTokenPolicyValue(web3.governance.mode)}</dd></div>
-            <div><dt>Legal</dt><dd>{formatTokenPolicyValue(web3.legal.classification)}</dd></div>
-            <div><dt>Contract</dt><dd>{web3.smart_contract.chain ?? "not set"} / {web3.smart_contract.standard ?? "not set"}</dd></div>
-            <div><dt>Audit</dt><dd>{formatTokenPolicyValue(web3.smart_contract.audit_status)}</dd></div>
+            <div><dt>Decision Rules</dt><dd>{formatTokenPolicyValue(web3.governance.mode)}</dd></div>
+            <div><dt>Legal Status</dt><dd>{formatTokenPolicyValue(web3.legal.classification)}</dd></div>
+            <div><dt>Smart Contract</dt><dd>{web3.smart_contract.chain ?? "Not set"} / {web3.smart_contract.standard ?? "Not set"}</dd></div>
+            <div><dt>Contract Audit</dt><dd>{formatTokenPolicyValue(web3.smart_contract.audit_status)}</dd></div>
           </dl>
         </Card>
 
         {tokenFlowEvidence ? (
-          <Card className="span-12" title="P5 Whitepaper Evidence Pack">
-            <p className="card-intro">{tokenFlowEvidence.summary}</p>
+          <Card className="span-12" title="Whitepaper Evidence">
+            <p className="card-intro">{simplifyResultText(tokenFlowEvidence.summary)}</p>
             <div className="table-wrap">
               <table>
                 <thead>
@@ -231,10 +236,10 @@ export default async function TokenFlowPage({
                 <tbody>
                   {tokenFlowEvidence.rows.map((row) => (
                     <tr key={row.key}>
-                      <td>{row.label}</td>
+                      <td>{simplifyResultText(row.label)}</td>
                       <td>{row.status}</td>
-                      <td>{row.value}</td>
-                      <td>{row.detail}</td>
+                      <td>{simplifyResultText(row.value)}</td>
+                      <td>{simplifyResultText(row.detail)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -243,7 +248,7 @@ export default async function TokenFlowPage({
             {tokenFlowEvidence.caveats.length > 0 ? (
               <ul className="compact-list">
                 {tokenFlowEvidence.caveats.map((caveat) => (
-                  <li key={caveat}>{caveat}</li>
+                  <li key={caveat}>{simplifyResultText(caveat)}</li>
                 ))}
               </ul>
             ) : null}

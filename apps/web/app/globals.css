@@ -1082,6 +1082,8 @@ button, input, select, textarea { font: inherit; }
 
 .snapshot-card-export {
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
   justify-content: flex-end;
   margin-top: 0.4rem;
 }

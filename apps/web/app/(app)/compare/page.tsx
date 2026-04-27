@@ -141,16 +141,16 @@ export default async function ComparePage() {
   return (
     <>
       <PageHeader
-        step={{ current: 4, total: 4, label: "Side-by-Side Analysis" }}
-        title="Compare Runs"
-        description="Select which scenarios to compare across key metrics, goal scores, and milestone checkpoints."
+        step={{ current: 4, total: 4, label: "Compare Results" }}
+        title="Compare Results"
+        description="Choose simulation results and compare money, risk, ALPHA flow, goals, and data quality."
       />
 
       {!databaseConfigured ? (
         <section className="page-grid">
           <div className="card span-12">
             <h3>Database setup required</h3>
-            <p className="muted">DATABASE_URL is required to load completed runs.</p>
+            <p className="muted">DATABASE_URL is required to load completed results.</p>
           </div>
         </section>
       ) : null}

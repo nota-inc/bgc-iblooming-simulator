@@ -167,18 +167,19 @@ function formatCompareParameterValue(parameterKey: string, value: string | numbe
 }
 
 const parameterLabelToKey: Record<string, string> = {
+  "Result mode": "scenario_mode_label",
   k_pc: "k_pc",
   k_sp: "k_sp",
   "User monthly cap": "cap_user_monthly",
   "Group monthly cap": "cap_group_monthly",
-  "Sink target": "sink_target",
+  "Internal use target": "sink_target",
   "Cash-out mode": "cashout_mode",
   "Cash-out minimum": "cashout_min_usd",
   "Cash-out fee": "cashout_fee_bps",
   "Cash-out windows / year": "cashout_windows_per_year",
   "Cash-out window days": "cashout_window_days",
-  "Projection horizon": "projection_horizon_months",
-  "Milestone count": "milestone_count"
+  "Forecast length": "projection_horizon_months",
+  "Phase count": "milestone_count"
 };
 
 function findSegmentValue(run: CompareRunRecord, segmentType: string, segmentKey: string, metricKey: string) {
@@ -400,7 +401,7 @@ function buildCompareReport(runs: CompareRunRecord[]) {
     const parameters = extrasByRunId.get(runId)?.parameters;
 
     if (!parameters) {
-      return "n/a";
+      return "Not set";
     }
 
     const value = parameters[parameterKey as keyof typeof parameters] as string | number | null | undefined;
@@ -422,7 +423,7 @@ function buildCompareReport(runs: CompareRunRecord[]) {
 
   const getFounderQuestionStatusLabel = (status: string) => {
     if (status === "recommended") return "Recommended";
-    if (status === "pending_founder") return "Founder Decision";
+    if (status === "pending_founder") return "Decision Needed";
     return "Blocked";
   };
 
@@ -434,8 +435,8 @@ function buildCompareReport(runs: CompareRunRecord[]) {
   };
 
   return {
-    title: `Compare Report · ${runs.length} Selected Scenario${runs.length === 1 ? "" : "s"}`,
-    subtitle: "Compare export includes simulation summary, status memo, radar, decisions, cashflow, data coverage, pilot recommendation, parameters, founder questions, technical plan, treasury risk, distribution, goals, milestones, and run context.",
+    title: `Compare Report · ${runs.length} Selected Result${runs.length === 1 ? "" : "s"}`,
+    subtitle: "Compare export includes summary, status memo, quick score chart, decisions, money view, data quality, recommended setup, parameters, open decisions, next build steps, treasury safety, distribution, goals, phases, and result details.",
     generatedAt: new Intl.DateTimeFormat("en-US", {
       dateStyle: "medium",
       timeStyle: "short"
@@ -453,19 +454,19 @@ function buildCompareReport(runs: CompareRunRecord[]) {
         statusTone: getTone(run.status),
         verdict: extra?.verdictLabel ?? "Pending",
         verdictTone: getTone(extra?.verdictStatus ?? "pending"),
-        completedAt: run.completedAt?.toLocaleString("en-US") ?? "Pending"
+        completedAt: run.completedAt?.toLocaleString("en-US") ?? "Not completed"
       };
     }),
     radar: buildRadar(runs, runDisplayLabels),
     comparisonTables: [
       {
-        title: "Simulation Summary",
-        subtitle: "Compare-level readout for founder review before diving into detailed scenario and treasury tables.",
-        rowLabel: "Summary Item",
+        title: "Summary",
+        subtitle: "Plain summary before the detailed result and treasury tables.",
+        rowLabel: "Topic",
         columns: [
           { label: "Status" },
-          { label: "Current Readout" },
-          { label: "Implication" }
+          { label: "What It Shows" },
+          { label: "Why It Matters" }
         ],
         rows: decisionSupport.simulationSummary.rows.map((row) => ({
           label: row.label,
@@ -484,13 +485,13 @@ function buildCompareReport(runs: CompareRunRecord[]) {
         }))
       },
       {
-        title: "Executive Status Memo",
-        subtitle: "Founder-facing status memo generated from the current compare set.",
+        title: "Status Memo",
+        subtitle: "Short memo generated from the current comparison.",
         rowLabel: "Memo Item",
         columns: [
           { label: "Status" },
-          { label: "Current Readout" },
-          { label: "Implication" }
+          { label: "What It Shows" },
+          { label: "Why It Matters" }
         ],
         rows: decisionSupport.executiveStatusMemo.rows.map((row) => ({
           label: row.label,
@@ -509,19 +510,19 @@ function buildCompareReport(runs: CompareRunRecord[]) {
         }))
       },
       {
-        title: "Compare Decision Snapshot",
-        subtitle: "Verdict and core financial/risk metrics per selected run.",
+        title: "Result Cards",
+        subtitle: "Status and core money/risk metrics per selected result.",
         rowLabel: "Decision Item",
         rows: decisionRows
       },
       {
-        title: "Financial View by Scenario",
-        subtitle: "Founder-facing business cashflow posture per selected run.",
-        rowLabel: "Scenario",
+        title: "Money View by Result",
+        subtitle: "Business cash posture per selected result.",
+        rowLabel: "Result",
         columns: [
           { label: "Posture" },
-          { label: "Cashflow Readout" },
-          { label: "Leakage" },
+          { label: "Money View" },
+          { label: "Cash Out" },
           { label: "Tradeoff" }
         ],
         rows: decisionSupport.financialScenarioView.rows.map((row) => ({
@@ -533,12 +534,12 @@ function buildCompareReport(runs: CompareRunRecord[]) {
               tone: getTone(row.verdict)
             },
             {
-              primary: `Gross ${formatCommonMetricValue("company_gross_cash_in_total", row.grossCashIn)} · Revenue ${formatCommonMetricValue("company_retained_revenue_total", row.retainedRevenue)}`,
-              secondary: `Partner ${formatCommonMetricValue("company_partner_payout_out_total", row.partnerPayoutOut)} · Direct oblig. ${formatCommonMetricValue("company_direct_reward_obligation_total", row.directObligations)} · Net ${formatCommonMetricValue("company_net_treasury_delta_total", row.netTreasuryDelta)}`
+              primary: `Cash In ${formatCommonMetricValue("company_gross_cash_in_total", row.grossCashIn)} · Revenue Kept ${formatCommonMetricValue("company_retained_revenue_total", row.retainedRevenue)}`,
+              secondary: `Partner ${formatCommonMetricValue("company_partner_payout_out_total", row.partnerPayoutOut)} · Direct Rewards ${formatCommonMetricValue("company_direct_reward_obligation_total", row.directObligations)} · Net Cash ${formatCommonMetricValue("company_net_treasury_delta_total", row.netTreasuryDelta)}`
             },
             {
-              primary: `${formatCommonMetricValue("company_actual_payout_out_total", row.actualPayoutOut)} payout · ${formatCommonMetricValue("company_product_fulfillment_out_total", row.fulfillmentOut)} fulfillment`,
-              secondary: `${row.leakageRatePct.toFixed(2)}% of gross in`
+              primary: `${formatCommonMetricValue("company_actual_payout_out_total", row.actualPayoutOut)} paid out · ${formatCommonMetricValue("company_product_fulfillment_out_total", row.fulfillmentOut)} fulfillment`,
+              secondary: `${row.leakageRatePct.toFixed(2)}% of cash in`
             },
             {
               primary: row.tradeoff,
@@ -548,18 +549,18 @@ function buildCompareReport(runs: CompareRunRecord[]) {
         }))
       },
       {
-        title: "Business Cashflow Comparison",
-        subtitle: "Company cashflow. Fiat/cashflow values are shown in $ and kept separate from ALPHA movement.",
-        rowLabel: "Cashflow Metric",
+        title: "Money Comparison",
+        subtitle: "Cash in and cash out are shown in dollars. ALPHA movement is kept separate.",
+        rowLabel: "Money Metric",
         rows: buildMetricRows(runs, compareCashflowMetricKeys)
       },
       {
-        title: "Imported Data Coverage",
-        subtitle: "Summary of how complete the imported data is behind each run.",
-        rowLabel: "Coverage Layer",
+        title: "Data Completeness",
+        subtitle: "Shows how complete the uploaded data is behind each result.",
+        rowLabel: "Data Area",
         rows: [
           {
-            label: "Overall Coverage",
+            label: "Overall Data Quality",
             cells: runs.map((run) => {
               const coverage = extrasByRunId.get(run.id)?.historicalTruthCoverage;
               return {
@@ -580,7 +581,7 @@ function buildCompareReport(runs: CompareRunRecord[]) {
 
                 if (!coverage) {
                   return {
-                    primary: "N/A",
+                    primary: "Not available",
                     muted: true
                   };
                 }
@@ -596,17 +597,17 @@ function buildCompareReport(runs: CompareRunRecord[]) {
         ]
       },
       {
-        title: "Canonical Fidelity Audit",
-        subtitle: "Rule-family audit for where canonical/event-native closure is already covered and where stronger fidelity work is still needed.",
-        rowLabel: "Rule Family",
+        title: "Source Detail Check",
+        subtitle: "Shows which source details are already available and which details are still missing.",
+        rowLabel: "Source Area",
         rows: [
           {
-            label: "Overall Fidelity Readiness",
+            label: "Overall Source Detail",
             cells: runs.map((run) => {
               const audit = extrasByRunId.get(run.id)?.canonicalGapAudit;
               return {
                 primary: getHistoricalTruthCoverageLabel(audit?.readiness ?? "weak"),
-                secondary: audit?.summary ?? "No canonical fidelity audit recorded.",
+                secondary: audit?.summary ?? "No source detail check recorded yet.",
                 tone: getTone(
                   audit?.readiness === "strong"
                     ? "candidate"
@@ -628,7 +629,7 @@ function buildCompareReport(runs: CompareRunRecord[]) {
 
                 if (!auditRow) {
                   return {
-                    primary: "N/A",
+                    primary: "Not available",
                     muted: true
                   };
                 }
@@ -650,8 +651,8 @@ function buildCompareReport(runs: CompareRunRecord[]) {
         ]
       },
       {
-        title: "Recommended Pilot Envelope",
-        subtitle: `Compare-level recommendation. Current strongest run: ${decisionSupport.recommendedEnvelope.recommendedRunLabel ?? "not available"}. ${decisionSupport.recommendedEnvelope.summary}`,
+        title: "Recommended Setup",
+        subtitle: `Recommendation from this comparison. Current strongest result: ${decisionSupport.recommendedEnvelope.recommendedRunLabel ?? "not available"}. ${decisionSupport.recommendedEnvelope.summary}`,
         rowLabel: "Setup Item",
         rows: [
           {
@@ -669,7 +670,7 @@ function buildCompareReport(runs: CompareRunRecord[]) {
 
               if (extra?.adoptedBaselineRunId) {
                 return {
-                  primary: "Another Run Adopted",
+                  primary: "Another Result Adopted",
                   secondary: "This scenario currently has a different adopted pilot baseline.",
                   tone: "info"
                 };
@@ -683,7 +684,7 @@ function buildCompareReport(runs: CompareRunRecord[]) {
             })
           },
           {
-            label: "Envelope Status",
+            label: "Setup Status",
             cells: runs.map((run) => ({
               primary:
                 run.id === decisionSupport.recommendedEnvelope.recommendedRunId
@@ -693,7 +694,7 @@ function buildCompareReport(runs: CompareRunRecord[]) {
                       ? "Needs Review"
                       : "Blocked"
                   : "Alternative",
-              secondary: run.id === decisionSupport.recommendedEnvelope.recommendedRunId ? "Current strongest run" : "Compared option",
+              secondary: run.id === decisionSupport.recommendedEnvelope.recommendedRunId ? "Current strongest result" : "Compared option",
               tone:
                 run.id === decisionSupport.recommendedEnvelope.recommendedRunId
                   ? getTone(
@@ -714,7 +715,7 @@ function buildCompareReport(runs: CompareRunRecord[]) {
 
               return {
                 primary: parameterValue,
-                secondary: run.id === decisionSupport.recommendedEnvelope.recommendedRunId ? item.rationale : "Compared scenario value",
+                secondary: run.id === decisionSupport.recommendedEnvelope.recommendedRunId ? item.rationale : "Compared result value",
                 tone: run.id === decisionSupport.recommendedEnvelope.recommendedRunId ? "accent" : undefined
               };
             })
@@ -722,17 +723,17 @@ function buildCompareReport(runs: CompareRunRecord[]) {
         ]
       },
       {
-        title: "Parameter Registry",
-        subtitle: "Parameter register aligned to the Simulation Docs: tested range, working default, current recommendation, and decision owner.",
-        rowLabel: "Parameter",
+        title: "Parameter Guide",
+        subtitle: "Guide for each setting: meaning, tested values, current default, suggested choice, and decision owner.",
+        rowLabel: "Setting",
         columns: [
           { label: "Symbol" },
-          { label: "Description" },
-          { label: "Tested Range" },
-          { label: "Working Default" },
-          { label: "Current Recommendation" },
+          { label: "Meaning" },
+          { label: "Tested Values" },
+          { label: "Current Default" },
+          { label: "Suggested Choice" },
           { label: "Decision Owner" },
-          { label: "Classification" }
+          { label: "Type" }
         ],
         rows: decisionSupport.parameterRegistry.map((row) => ({
           label: row.label,
@@ -757,7 +758,7 @@ function buildCompareReport(runs: CompareRunRecord[]) {
             },
             {
               primary: getParameterClassificationLabel(row.classification),
-              secondary: `Status: ${
+              secondary: `Rule: ${
                 row.guardrailStatus === "allowed"
                   ? "Editable"
                   : row.guardrailStatus === "conditional"
@@ -776,16 +777,16 @@ function buildCompareReport(runs: CompareRunRecord[]) {
         }))
       },
       {
-        title: "Parameter Range Synthesis",
-        subtitle: "Tested values across the selected runs, normalized into ready, caution, and rejected ranges.",
-        rowLabel: "Parameter",
+        title: "Parameter Ranges",
+        subtitle: "Values tested across the selected results, grouped into recommended, use-with-care, and do-not-use ranges.",
+        rowLabel: "Setting",
         rows: decisionSupport.parameterRanges.map((row) => ({
           label: `${row.label} · Recommended ${row.recommendedValues}`,
           cells: runs.map((run) => {
             const parameterValue = getParameterDisplayValue(run.id, row.parameterKey);
             const extraNotes = [`Tested ${row.testedValues}`];
-            if (row.cautionValues) extraNotes.push(`Caution ${row.cautionValues}`);
-            if (row.rejectedValues) extraNotes.push(`Rejected ${row.rejectedValues}`);
+            if (row.cautionValues) extraNotes.push(`Use with care ${row.cautionValues}`);
+            if (row.rejectedValues) extraNotes.push(`Do not use ${row.rejectedValues}`);
             return {
               primary: parameterValue,
               secondary: extraNotes.join(" · "),
@@ -795,15 +796,15 @@ function buildCompareReport(runs: CompareRunRecord[]) {
         }))
       },
       {
-        title: "Founder Question Queue",
-        subtitle: "Questions that still require explicit founder calls before Whitepaper v1 and Tokenflow v1 can be treated as closed.",
-        rowLabel: "Founder Question",
+        title: "Open Decisions",
+        subtitle: "Decisions that still need a clear answer before Whitepaper v1 and Token Flow v1 can be treated as final.",
+        rowLabel: "Question",
         columns: [
           { label: "Status" },
-          { label: "Why Now" },
-          { label: "Recommended Direction" },
+          { label: "Why It Matters" },
+          { label: "Suggested Answer" },
           { label: "Decision Owner" },
-          { label: "Decision Options" }
+          { label: "Options" }
         ],
         rows: decisionSupport.founderQuestionQueue.map((row) => ({
           label: row.question,
@@ -828,9 +829,9 @@ function buildCompareReport(runs: CompareRunRecord[]) {
         }))
       },
       {
-        title: "Technical Implementation Plan",
-        subtitle: "Minimal implementation plan for closing the brief package without expanding engine scope unnecessarily.",
-        rowLabel: "Workstream",
+        title: "Next Build Steps",
+        subtitle: "Practical build steps needed to close the brief package without adding unnecessary engine work.",
+        rowLabel: "Work Area",
         columns: [
           { label: "Owner" },
           { label: "Status" },
@@ -857,8 +858,8 @@ function buildCompareReport(runs: CompareRunRecord[]) {
         }))
       },
       {
-        title: "Decision Governance Snapshot",
-        subtitle: "Generated decision basis per run, plus current governance state, owner, and latest resolution note.",
+        title: "Decision Notes",
+        subtitle: "Saved notes for each decision: current status, owner, and latest reason or resolution.",
         rowLabel: "Decision Item",
         rows: decisionGovernanceRows.map((decisionRow) => {
           const [decisionKey, decisionLabel] = decisionRow.split("::");
@@ -871,7 +872,7 @@ function buildCompareReport(runs: CompareRunRecord[]) {
 
               if (!entry) {
                 return {
-                  primary: "N/A",
+                  primary: "Not available",
                   muted: true
                 };
               }
@@ -901,59 +902,59 @@ function buildCompareReport(runs: CompareRunRecord[]) {
       },
       {
         title: "Data vs Assumptions",
-        subtitle: "Imported data, editable values, assumptions, locked limits, and calculated results are kept separate.",
+        subtitle: "Shows which values come from uploaded data, which are editable, and which are assumptions or calculated outputs.",
         rowLabel: "Item",
         rows: decisionSupport.truthAssumptionMatrix.map((item) => ({
           label: item.label,
           cells: runs.map((_, index) => ({
             primary: getTruthClassificationLabel(item.classification),
-            secondary: index === 0 ? `${item.value} · ${item.note}` : "Same compare-level classification",
+            secondary: index === 0 ? `${item.value} · ${item.note}` : "Same comparison-level classification",
             tone: getTone(item.classification === "historical_truth" ? "candidate" : item.classification === "scenario_assumption" ? "risky" : item.classification === "locked_boundary" ? "pending" : "info"),
             muted: index > 0
           }))
         }))
       },
       {
-        title: "ALPHA Policy Comparison",
-        subtitle: "Policy-token layer only: issued, used, held, and ALPHA routed into the cash-out path.",
+        title: "ALPHA Flow Comparison",
+        subtitle: "Shows ALPHA issued, used, held, and sent to the cash-out path.",
         rowLabel: "ALPHA Metric",
         rows: buildMetricRows(runs, compareAlphaMetricKeys)
       },
       {
-        title: "Treasury Risk Comparison",
-        subtitle: "Health signals used to judge treasury pressure, runway, internal use, and concentration risk.",
-        rowLabel: "Risk Metric",
+        title: "Treasury Safety Comparison",
+        subtitle: "Health signals for payout pressure, reserve runway, internal use, and reward concentration.",
+        rowLabel: "Safety Metric",
         rows: buildMetricRows(runs, compareTreasuryMetricKeys)
       },
       {
-        title: "Distribution Comparison",
-        subtitle: "Concentration and source split from the Distribution view.",
+        title: "Distribution View",
+        subtitle: "Shows which member group or source receives the largest share of ALPHA and cash impact.",
         rowLabel: "Distribution Measure",
         rows: [
           {
-            label: "Largest Member Tier",
+            label: "Largest Member Group",
             cells: runs.map((run) => {
               const largestTier = findLargestSegment(run, "member_tier", "reward_share_pct");
               return {
-                primary: largestTier ? `${largestTier.label} · ${formatCommonMetricValue("reward_share_pct", largestTier.value)}` : "N/A",
+                primary: largestTier ? `${largestTier.label} · ${formatCommonMetricValue("reward_share_pct", largestTier.value)}` : "Not available",
                 muted: !largestTier
               };
             })
           },
           {
-            label: "Largest Source by ALPHA",
+            label: "Largest ALPHA Source",
             cells: runs.map((run) => {
               const largestSource = findLargestSegment(run, "source_system", "alpha_issued_total");
               const totalIssued = getSummaryValue(run, "alpha_issued_total");
               const share = largestSource && totalIssued > 0 ? (largestSource.value / totalIssued) * 100 : 0;
               return {
-                primary: largestSource ? `${largestSource.label} · ${formatCommonMetricValue("reward_share_pct", share)}` : "N/A",
+                primary: largestSource ? `${largestSource.label} · ${formatCommonMetricValue("reward_share_pct", share)}` : "Not available",
                 muted: !largestSource
               };
             })
           },
           {
-            label: "BGC Net Treasury Delta",
+            label: "BGC Net Cash Change",
             cells: runs.map((run) => ({
               primary: formatCommonMetricValue(
                 "company_net_treasury_delta_total",
@@ -962,7 +963,7 @@ function buildCompareReport(runs: CompareRunRecord[]) {
             }))
           },
           {
-            label: "iBLOOMING Net Treasury Delta",
+            label: "iBLOOMING Net Cash Change",
             cells: runs.map((run) => ({
               primary: formatCommonMetricValue(
                 "company_net_treasury_delta_total",
@@ -973,8 +974,8 @@ function buildCompareReport(runs: CompareRunRecord[]) {
         ]
       },
       {
-        title: "Strategic Goals Comparison",
-        subtitle: "Strategic objective status, score, evidence level, and first reason for each selected scenario.",
+        title: "Goal Comparison",
+        subtitle: "Shows each goal's status, score, evidence level, and main reason.",
         rowLabel: "Objective",
         rows: strategicObjectiveOrder.map((objectiveKey) => ({
           label: strategicObjectiveLabels[objectiveKey],
@@ -1001,15 +1002,15 @@ function buildCompareReport(runs: CompareRunRecord[]) {
         }))
       },
       {
-        title: "Milestone Comparison",
-        subtitle: "Milestone verdict, payout pressure, reserve runway, payout, and net treasury delta.",
-        rowLabel: "Milestone",
+        title: "Phase Comparison",
+        subtitle: "Phase status, payout pressure, reserve runway, cash paid out, and net cash change.",
+        rowLabel: "Phase",
         rows: milestoneKeys.length === 0
           ? [
               {
-                label: "Milestone results",
+                label: "Phase results",
                 cells: runs.map(() => ({
-                  primary: "No milestone results yet.",
+                  primary: "No phase results yet.",
                   muted: true
                 }))
               }
@@ -1025,14 +1026,14 @@ function buildCompareReport(runs: CompareRunRecord[]) {
 
                   if (!milestone) {
                     return {
-                      primary: "N/A",
+                      primary: "Not available",
                       muted: true
                     };
                   }
 
                   return {
                     primary: getPolicyStatusLabel(milestone.policy_status),
-                    secondary: `${formatCommonMetricValue("payout_inflow_ratio", milestone.summary_metrics.payout_inflow_ratio)} | ${formatMonthCountLabel(milestone.summary_metrics.reserve_runway_months)} | Net ${formatCommonMetricValue("company_net_treasury_delta_total", milestone.summary_metrics.company_net_treasury_delta_total)}`,
+                    secondary: `${formatCommonMetricValue("payout_inflow_ratio", milestone.summary_metrics.payout_inflow_ratio)} | ${formatMonthCountLabel(milestone.summary_metrics.reserve_runway_months)} | Net Cash ${formatCommonMetricValue("company_net_treasury_delta_total", milestone.summary_metrics.company_net_treasury_delta_total)}`,
                     tone: getTone(milestone.policy_status)
                   };
                 })

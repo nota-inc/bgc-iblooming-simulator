@@ -351,7 +351,7 @@ function buildCohortProjectionValue(
   }
 
   return [
-    `${cohort.new_members_per_month} new/mo`,
+    `${cohort.new_members_per_month} new/month`,
     `${formatPercent(cohort.monthly_churn_rate_pct)} churn`,
     `${formatPercent(cohort.monthly_reactivation_rate_pct)} reactivation`
   ].join(" · ");
@@ -364,7 +364,7 @@ function buildMilestoneValue(
     return "none";
   }
 
-  return `${parameters.milestone_schedule.length} milestone${
+  return `${parameters.milestone_schedule.length} phase${
     parameters.milestone_schedule.length === 1 ? "" : "s"
   }`;
 }
@@ -427,11 +427,11 @@ function buildTokenFlowEvidence(
   const caveats: string[] = [];
 
   if (summary.reward_concentration_top10_pct > 60) {
-    caveats.push("Reward concentration is above the fairness gate; public tokenomics wording should not claim broad distribution yet.");
+    caveats.push("Reward concentration is high, so public token wording should not claim broad distribution yet.");
   }
 
   if (summary.forecast_projected_period_count > 0) {
-    caveats.push("Projected periods are scenario assumptions and must be separated from observed historical periods.");
+    caveats.push("Forecast months are assumptions and must stay separate from uploaded data months.");
   }
 
   if (advancedForecastMode) {
@@ -439,7 +439,7 @@ function buildTokenFlowEvidence(
   }
 
   if (summary.alpha_modeled_spent_total > 0) {
-    caveats.push("Internal-use totals include modeled sink demand; actual sink_spend_usd remains separated from forecast sink adoption.");
+    caveats.push("Internal-use totals include modeled demand; uploaded internal-use data remains separated from forecast adoption.");
   }
 
   if (truthCoverage.status !== "strong") {
@@ -447,11 +447,11 @@ function buildTokenFlowEvidence(
   }
 
   if (canonicalGapAudit.readiness !== "strong") {
-    caveats.push("Canonical fidelity is not fully closed; token-flow claims should cite the accepted working basis.");
+    caveats.push("Source detail is not fully complete; ALPHA flow claims should cite the accepted working basis.");
   }
 
   if (web3AssumptionsOpen) {
-    caveats.push("Web3 supply, transferability, liquidity, governance, smart-contract, and legal assumptions still require founder/legal lock.");
+    caveats.push("Web3 supply, transferability, liquidity, decision rules, smart-contract, and legal assumptions still require team/legal approval.");
   }
 
   return {
@@ -461,12 +461,12 @@ function buildTokenFlowEvidence(
         ? "tokenflow_ready"
         : "whitepaper_draft_ready",
     summary: web3AssumptionsOpen
-      ? "Token-flow mechanics are evidenced, but Web3 public-token assumptions remain open."
-      : "Phase 1 ALPHA token-flow mechanics are evidenced as an internal non-transferable policy-credit layer.",
+      ? "ALPHA flow is supported by this result, but public Web3 token assumptions are still open."
+      : "Phase 1 ALPHA is supported as an internal, non-transferable credit.",
     rows: [
       {
         key: "alpha_spec_lock",
-        label: "P1 Token Flow Spec Lock",
+        label: "ALPHA Policy",
         value: `${tokenPolicy.classification} · ${tokenPolicy.transferability} · ${tokenPolicy.on_chain_status}`,
         status:
           tokenPolicy.classification === "internal_credit" &&
@@ -474,11 +474,11 @@ function buildTokenFlowEvidence(
           tokenPolicy.on_chain_status === "not_on_chain"
             ? "locked"
             : "assumption",
-        detail: "Defines the language boundary for ALPHA before Tokenflow or Whitepaper claims are written."
+        detail: "Defines what ALPHA is before token flow or whitepaper claims are written."
       },
       {
         key: "scenario_mode",
-        label: "Mode Skenario",
+        label: "Result Mode",
         value: buildScenarioModeValue(parameters),
         status: advancedForecastMode ? "assumption" : "locked",
         detail: advancedForecastMode
@@ -487,52 +487,52 @@ function buildTokenFlowEvidence(
       },
       {
         key: "token_flow_ledger",
-        label: "P2 Token Flow Ledger",
+        label: "ALPHA Ledger",
         value: `ending ${summary.alpha_ending_balance_total} · burned ${summary.alpha_expired_burned_total}`,
         status: "ready",
-        detail: "Run output includes opening balance, issued, actual used, modeled used, cash-out, expired/burned, and ending balance by period."
+        detail: "Result output includes opening balance, issued, actual used, modeled used, cash-out, expired/burned, and ending balance by month."
       },
       {
         key: "actual_vs_forecast_sink",
-        label: "P3 Actual vs Forecast Sink",
+        label: "Actual vs Modeled Internal Use",
         value: `actual ${summary.alpha_actual_spent_total} · modeled ${summary.alpha_modeled_spent_total} · use ${formatPercent(summary.sink_utilization_rate)}`,
         status: summary.alpha_modeled_spent_total > 0 ? "assumption" : "ready",
-        detail: `Actual sink_spend_usd is preserved separately from forecast adoption assumptions (${buildSinkAdoptionValue(parameters)}).`
+        detail: `Uploaded internal-use data stays separate from forecast adoption assumptions (${buildSinkAdoptionValue(parameters)}).`
       },
       {
         key: "forecast_layer",
-        label: "P3 Forecast Layer",
-        value: `${summary.forecast_actual_period_count} actual periods · ${summary.forecast_projected_period_count} projected periods · ${forecastPolicy.mode}`,
+        label: "Forecast Settings",
+        value: `${summary.forecast_actual_period_count} observed months · ${summary.forecast_projected_period_count} forecast months · ${forecastPolicy.mode}`,
         status: summary.forecast_projected_period_count > 0 || forecastPolicy.mode !== "snapshot_window" ? "assumption" : "ready",
-        detail: "Observed snapshot periods and forward-looking periods are separated in the run evidence."
+        detail: "Uploaded data months and forecast months are separated in the result evidence."
       },
       {
         key: "supply_model",
-        label: "P4 Supply Model",
+        label: "Supply Model",
         value: `${web3.supply_model} · max supply ${formatNullableNumber(web3.max_supply)}`,
         status: web3.supply_model === "not_applicable_internal" ? "locked" : web3.max_supply ? "assumption" : "blocked",
-        detail: "Public Web3 tokenomics needs an explicit supply policy before it can be described as final."
+        detail: "Public Web3 token plans need a clear supply policy before they can be described as final."
       },
       {
         key: "allocation_model",
-        label: "P4 Allocation",
+        label: "Allocation",
         value: allocationComplete ? `${allocationTotal}% allocated` : "allocation not fully set",
         status: web3.supply_model === "not_applicable_internal" ? "locked" : allocationComplete && Math.abs(allocationTotal - 100) < 0.01 ? "assumption" : "blocked",
-        detail: "Community, treasury, team, investor, and liquidity allocations must sum to 100% for public tokenomics."
+        detail: "Community, treasury, team, investor, and liquidity allocations must sum to 100% for a public token plan."
       },
       {
         key: "liquidity_governance_legal",
-        label: "P4 Liquidity / Governance / Legal",
+        label: "Liquidity / Decision Rules / Legal",
         value: `${web3.liquidity.enabled ? "liquidity enabled" : "no liquidity"} · ${web3.governance.mode} · ${web3.legal.classification}`,
         status: web3.network_status === "not_applicable_internal" ? "locked" : "assumption",
-        detail: "Web3 claims need explicit liquidity posture, governance control, and legal classification."
+        detail: "Web3 claims need clear liquidity, decision rules, and legal settings."
       },
       {
         key: "whitepaper_binding",
-        label: "P5 Whitepaper Evidence Pack",
-        value: `${truthCoverage.status} data · ${canonicalGapAudit.readiness} canonical · ${caveats.length} caveats`,
+        label: "Whitepaper Evidence",
+        value: `${truthCoverage.status} data · ${canonicalGapAudit.readiness} source detail · ${caveats.length} caveats`,
         status: caveats.length === 0 ? "ready" : "assumption",
-        detail: "Whitepaper should cite the snapshot, scenario parameters, run results, risk flags, and caveats from this pack."
+        detail: "Whitepaper should cite the uploaded data, scenario settings, result, warnings, and caveats from this pack."
       }
     ],
     caveats
@@ -578,15 +578,15 @@ function buildRunRecommendedSetup(
   pushItem(items, "k_sp", "k_sp", String(parameters.k_sp), "recommended");
   pushItem(items, "cap_user_monthly", "User monthly cap", parameters.cap_user_monthly, "recommended");
   pushItem(items, "cap_group_monthly", "Group monthly cap", parameters.cap_group_monthly, "recommended");
-  pushItem(items, "sink_target", "Sink target", String(parameters.sink_target), "caution");
-  pushItem(items, "sink_adoption_model", "Sink adoption model", buildSinkAdoptionValue(parameters), "caution");
+  pushItem(items, "sink_target", "Internal use target", String(parameters.sink_target), "caution");
+  pushItem(items, "sink_adoption_model", "Internal use model", buildSinkAdoptionValue(parameters), "caution");
   pushItem(items, "cashout_mode", "Cash-out mode", parameters.cashout_mode, "caution");
   pushItem(items, "cashout_min_usd", "Cash-out minimum", currencyFormatter.format(parameters.cashout_min_usd), "caution");
   pushItem(items, "cashout_fee_bps", "Cash-out fee", `${parameters.cashout_fee_bps} bps`, "caution");
   pushItem(items, "cashout_windows_per_year", "Cash-out windows / year", String(parameters.cashout_windows_per_year), "caution");
   pushItem(items, "cashout_window_days", "Cash-out window days", String(parameters.cashout_window_days), "caution");
-  pushItem(items, "projection_horizon_months", "Projection horizon", formatPlanningHorizon(parameters.projection_horizon_months), "caution");
-  pushItem(items, "milestone_schedule", "Milestone schedule", buildMilestoneValue(parameters), "caution");
+  pushItem(items, "projection_horizon_months", "Forecast time range", formatPlanningHorizon(parameters.projection_horizon_months), "caution");
+  pushItem(items, "milestone_schedule", "Phase schedule", buildMilestoneValue(parameters), "caution");
   pushItem(items, "reward_global_factor", "Global reward factor", String(parameters.reward_global_factor), "locked");
   pushItem(items, "reward_pool_factor", "Pool reward factor", String(parameters.reward_pool_factor), "locked");
   pushItem(
@@ -613,7 +613,7 @@ function buildRunRecommendedSetup(
   pushItem(
     items,
     "web3_tokenomics",
-    "Web3 tokenomics",
+    "Web3 token plan",
     `${parameters.web3_tokenomics.network_status} · ${parameters.web3_tokenomics.supply_model}`,
     parameters.web3_tokenomics.network_status === "not_applicable_internal" ? "locked" : "caution"
   );
@@ -629,7 +629,7 @@ function buildRunRecommendedSetup(
   }
 
   if (summary.payout_inflow_ratio >= 1) {
-    warnings.push("Treasury pressure is at or above retained revenue support and still needs founder review.");
+    warnings.push("Treasury pressure is at or above revenue support and still needs team review.");
   }
 
   if (isAdvancedForecastMode(parameters)) {
@@ -637,11 +637,11 @@ function buildRunRecommendedSetup(
   }
 
   return {
-    title: "Recommended Pilot Envelope",
+    title: "Recommended Setup",
     summary:
       recommendation.policy_status === "candidate"
-        ? "This run can be used as an initial pilot boundary: it is clear which values are policy choices and which come from imported data."
-        : "This run exposes a draft pilot envelope, but the settings still need caution before they can be treated as the recommended default.",
+        ? "This result can be used as an initial pilot setup: it is clear which values are policy choices and which come from uploaded data."
+        : "This result shows a draft setup, but the settings still need review before they can become the recommended default.",
     items,
     warnings
   };
@@ -664,26 +664,26 @@ function buildRunDecisionLog(
       title: "Imported business data stays unchanged",
       status: "fixed_truth",
       owner: "Understanding Doc",
-      rationale: `Run ${run.scenario.name} is calculated on top of ${run.snapshot.name}; scenarios do not rewrite imported reward or cashflow data.`
+      rationale: `Result ${run.scenario.name} is calculated on top of ${run.snapshot.name}; scenarios do not rewrite uploaded reward or money data.`
     }
   ];
 
   log.push({
     key: "pilot_policy_envelope",
-    title: "Pilot policy envelope from this run",
+    title: "Recommended setup from this result",
     status:
       recommendation.policy_status === "candidate"
         ? "recommended"
         : recommendation.policy_status === "risky"
           ? "pending_founder"
           : "blocked",
-    owner: recommendation.policy_status === "candidate" ? "Founder" : "Founder",
+    owner: "Business Team",
     rationale:
       recommendation.policy_status === "candidate"
-        ? `Treasury pressure is ${summary.payout_inflow_ratio.toFixed(2)}x with net treasury delta ${currencyFormatter.format(summary.company_net_treasury_delta_total)}.`
+        ? `Treasury pressure is ${summary.payout_inflow_ratio.toFixed(2)}x with net cash change ${currencyFormatter.format(summary.company_net_treasury_delta_total)}.`
         : recommendation.policy_status === "risky"
-          ? "This run is still usable for discussion, but founder review is required before it can become the pilot default."
-          : "This run fails core treasury or cashflow thresholds and should not be promoted as the pilot default."
+          ? "This result is still usable for discussion, but team review is required before it can become the pilot default."
+          : "This result fails core treasury or money thresholds and should not be promoted as the pilot default."
   });
 
   if (isAdvancedForecastMode(parameters)) {
@@ -691,8 +691,8 @@ function buildRunDecisionLog(
       key: "advanced_forecast_caveat",
       title: "Forecast needs a caveat",
       status: "pending_founder",
-      owner: "Founder / Strategy",
-      rationale: "This run uses new-member, churn, and reactivation assumptions. Result, Compare, Token Flow, and Whitepaper must describe those numbers as estimates."
+      owner: "Business Team / Strategy",
+      rationale: "This result uses new-member, churn, and reactivation assumptions. Result, Compare, Token Flow, and Whitepaper must describe those numbers as estimates."
     });
   }
 
@@ -721,9 +721,9 @@ function buildRunDecisionLog(
   if (riskyMilestones.length > 0) {
     log.push({
       key: "milestone_governance_review",
-      title: "Milestone promotion still needs founder review",
+      title: "Phase promotion still needs team review",
       status: "pending_founder",
-      owner: "Founder",
+      owner: "Business Team",
       rationale: riskyMilestones
         .map((milestone) => `${milestone.label}: ${milestone.reasons[0] ?? milestone.policy_status}`)
         .join("; ")
@@ -792,31 +792,31 @@ function buildRunTruthAssumptionMatrix(
     },
     {
       key: "sink_target",
-      label: "Sink target",
+      label: "Internal use target",
       value: String(parameters.sink_target),
       classification: "scenario_assumption",
       note: "Internal-use target is a scenario assumption."
     },
     {
       key: "sink_adoption_model",
-      label: "Sink adoption model",
+      label: "Internal use model",
       value: buildSinkAdoptionValue(parameters),
       classification: "scenario_assumption",
-      note: "Sink model adds estimated internal use without changing sink_spend_usd data."
+      note: "Internal use model adds estimated use without changing uploaded internal-use data."
     },
     {
       key: "projection_horizon",
-      label: "Projection horizon",
+      label: "Forecast time range",
       value: formatPlanningHorizon(parameters.projection_horizon_months),
       classification: "scenario_assumption",
       note: "Projection beyond the imported data period must be read as an assumption."
     },
     {
       key: "milestone_schedule",
-      label: "Milestone schedule",
+      label: "Phase schedule",
       value: buildMilestoneValue(parameters),
       classification: "scenario_assumption",
-      note: "Time-based policy changes are governance assumptions."
+      note: "Time-based policy changes are review assumptions."
     },
     {
       key: "reward_factor_lock",
@@ -842,7 +842,7 @@ function buildRunTruthAssumptionMatrix(
         parameters.alpha_token_policy.classification === "internal_credit"
           ? "locked_boundary"
           : "scenario_assumption",
-      note: "Spec lock separates Phase 1 internal ALPHA language from future Web3 token claims."
+      note: "This separates Phase 1 internal ALPHA language from future Web3 token claims."
     },
     {
       key: "forecast_policy",
@@ -856,13 +856,13 @@ function buildRunTruthAssumptionMatrix(
     },
     {
       key: "web3_tokenomics",
-      label: "Web3 tokenomics extension",
+      label: "Web3 token plan",
       value: `${parameters.web3_tokenomics.network_status} · ${parameters.web3_tokenomics.supply_model}`,
       classification:
         parameters.web3_tokenomics.network_status === "not_applicable_internal"
           ? "locked_boundary"
           : "scenario_assumption",
-      note: "Supply, allocation, vesting, liquidity, governance, smart contract, and legal settings are assumptions, not imported data."
+      note: "Supply, allocation, vesting, liquidity, decision rules, smart contract, and legal settings are assumptions, not uploaded data."
     }
   ];
 }
@@ -923,16 +923,16 @@ function buildDecisionPack(
     recommendation:
       recommendation.policy_status === "candidate"
         ? strongObjectives.length > 0
-          ? "This scenario stays within the current treasury thresholds when measured against imported recognized revenue support and snapshot reward distributions, and the cashflow lens remains readable enough for founder review."
-          : "This scenario stays within the current treasury thresholds when measured against imported recognized revenue support and snapshot reward distributions, but the strategic upside remains limited."
+          ? "This scenario stays within the current treasury thresholds when measured against uploaded revenue and reward data. The money view is clear enough for team review."
+          : "This scenario stays within the current treasury thresholds when measured against uploaded revenue and reward data, but the strategic upside is still limited."
         : recommendation.policy_status === "risky"
-          ? "This scenario is usable for discussion, but treasury pressure, concentration, or cashflow clarity still need founder review before adoption."
-          : "This scenario breaches core treasury safety thresholds against recognized revenue support or produces an unacceptable cashflow posture and should not be used as the pilot default.",
+          ? "This scenario is usable for discussion, but treasury pressure, concentration, or money clarity still needs team review before adoption."
+          : "This scenario breaks core treasury safety thresholds or produces an unsafe money position and should not be used as the pilot default.",
     preferred_settings: [
       `Evaluated snapshot: ${run.snapshot.name}`,
       `Evaluated template: ${run.scenario.templateType}`,
       `Scenario mode: ${buildScenarioModeValue(parameters)}`,
-      "Evaluation basis: imported recognized revenue support + snapshot reward distributions",
+      "Evaluation basis: uploaded revenue data + uploaded reward data",
       `Gross cash in: ${currencyFormatter.format(summary.company_gross_cash_in_total)}`,
       `Retained revenue: ${currencyFormatter.format(summary.company_retained_revenue_total)}`,
       `Partner payout out: ${currencyFormatter.format(summary.company_partner_payout_out_total)}`,
@@ -940,12 +940,12 @@ function buildDecisionPack(
       `Pool funding obligations: ${currencyFormatter.format(summary.company_pool_funding_obligation_total)}`,
       `Actual payout out: ${currencyFormatter.format(summary.company_actual_payout_out_total)}`,
       `Product fulfillment out: ${currencyFormatter.format(summary.company_product_fulfillment_out_total)}`,
-      `Net treasury delta: ${currencyFormatter.format(summary.company_net_treasury_delta_total)}`,
+      `Net cash change: ${currencyFormatter.format(summary.company_net_treasury_delta_total)}`,
       `Ending ALPHA balance: ${summary.alpha_ending_balance_total.toFixed(2)}`,
       `Actual ALPHA used: ${summary.alpha_actual_spent_total.toFixed(2)}`,
       `Modeled ALPHA used: ${summary.alpha_modeled_spent_total.toFixed(2)}`,
-      `Actual periods: ${summary.forecast_actual_period_count}`,
-      `Projected periods: ${summary.forecast_projected_period_count}`,
+      `Observed months: ${summary.forecast_actual_period_count}`,
+      `Forecast months: ${summary.forecast_projected_period_count}`,
       `Treasury pressure: ${summary.payout_inflow_ratio.toFixed(2)}x`,
       `Reserve runway: ${summary.reserve_runway_months.toFixed(2)} months`,
       `k_pc: ${parameters.k_pc}`,
@@ -953,21 +953,21 @@ function buildDecisionPack(
       `Cash-out mode: ${parameters.cashout_mode}`,
       `Sink target: ${parameters.sink_target}`,
       `Sink adoption model: ${buildSinkAdoptionValue(parameters)}`,
-      `Projection horizon: ${parameters.projection_horizon_months ?? "snapshot window"}`,
+      `Forecast time range: ${parameters.projection_horizon_months ?? "current data range"}`,
       `New members / month: ${parameters.cohort_assumptions.new_members_per_month}`,
       `Monthly churn: ${parameters.cohort_assumptions.monthly_churn_rate_pct}%`,
       `Monthly reactivation: ${parameters.cohort_assumptions.monthly_reactivation_rate_pct}%`,
       `ALPHA token policy: ${parameters.alpha_token_policy.classification} / ${parameters.alpha_token_policy.transferability}`,
-      `Web3 tokenomics: ${parameters.web3_tokenomics.network_status} / ${parameters.web3_tokenomics.supply_model}`,
+      `Web3 token plan: ${parameters.web3_tokenomics.network_status} / ${parameters.web3_tokenomics.supply_model}`,
       ...parameters.milestone_schedule.map(
         (milestone) =>
-          `Milestone ${milestone.label}: starts month ${milestone.start_month}${
+          `Phase ${milestone.label}: starts month ${milestone.start_month}${
             milestone.end_month ? `, ends month ${milestone.end_month}` : ""
           }`
       ),
       ...milestoneEvaluations.map(
         (milestone) =>
-          `Gate ${milestone.label}: ${milestone.policy_status} (${milestone.start_period_key} to ${milestone.end_period_key})`
+          `Phase check ${milestone.label}: ${milestone.policy_status} (${milestone.start_period_key} to ${milestone.end_period_key})`
       ),
       ...strongObjectives.map(
         (objective) =>
@@ -978,26 +978,26 @@ function buildDecisionPack(
       ...flags.map((flag) => flag.message),
       ...failedMilestones.map(
         (milestone) =>
-          `${milestone.label}: milestone gate failed (${milestone.reasons[0] ?? "Treasury thresholds are violated."})`
+          `${milestone.label}: phase gate failed (${milestone.reasons[0] ?? "Treasury thresholds are violated."})`
       ),
       ...weakObjectives.map(
         (objective) => `${objective.label}: ${objective.reasons[0] ?? "Strategic score is below threshold."}`
       )
     ],
     unresolved_questions: [
-      "Confirm whether the selected snapshot has complete recognized revenue fields for the period under review.",
-      "Confirm whether gross-cash, partner-payout, and product-fulfillment fields are complete enough for the current cashflow lens.",
+      "Confirm whether the selected uploaded data has complete revenue fields for the period under review.",
+      "Confirm whether cash-in, partner-payout, and fulfillment-cost fields are complete enough for the current money view.",
       "Confirm whether the pilot should keep the current cash-out policy baseline or use a windowed override.",
-      "Confirm whether the sink target aligns with the initial utility scope approved for Phase 1.",
-      "Confirm whether modeled sink adoption assumptions are approved before using them for growth or whitepaper claims.",
+      "Confirm whether the internal-use target aligns with the initial utility scope approved for Phase 1.",
+      "Confirm whether modeled internal-use assumptions are approved before using them for growth or whitepaper claims.",
       ...(isAdvancedForecastMode(parameters)
-        ? ["Confirm Add Forecast is approved before using it in founder material or the Whitepaper."]
+        ? ["Confirm Add Forecast is approved before using it in team material or the Whitepaper."]
         : []),
       "Confirm whether ALPHA remains an internal non-transferable credit or becomes a future on-chain/tokenized asset.",
-      "Confirm Web3 supply, allocation, vesting, liquidity, governance, smart-contract, and legal assumptions before public whitepaper claims.",
+      "Confirm Web3 supply, allocation, vesting, liquidity, decision rules, smart-contract, and legal assumptions before public whitepaper claims.",
       ...riskyMilestones.map(
         (milestone) =>
-          `${milestone.label}: milestone gate is risky and still needs founder review before promotion.`
+          `${milestone.label}: phase gate is risky and still needs team review before promotion.`
       ),
       ...proxyObjectives.map(
         (objective) =>
@@ -1035,7 +1035,7 @@ export async function generateDecisionPackForRun(
   const canonicalGapAudit =
     (await getSnapshotCanonicalGapAudit(run.snapshotId)) ?? {
       readiness: "weak",
-      summary: "Canonical fidelity audit could not be read for this snapshot.",
+      summary: "Source detail check could not be read for this snapshot.",
       rows: []
     };
   const pack = buildDecisionPack(

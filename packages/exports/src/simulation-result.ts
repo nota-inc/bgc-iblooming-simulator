@@ -191,11 +191,11 @@ ${renderMetricTableMarkdown(report.summary)}
 
 ${renderMetricTableMarkdown(report.treasury)}
 
-## Risk Flags
+## Warnings
 
 ${
   report.flags.length === 0
-    ? "No risk flags."
+    ? "No warnings."
     : [
         "| Severity | Type | Period | Message |",
         "| --- | --- | --- | --- |",
@@ -223,20 +223,20 @@ ${group.rows.map((row) => `| ${row.segment} | ${row.measure} | ${row.value} |`).
 
 ## Decision Pack
 
-### Policy Verdict
+### Decision Summary
 
-- Verdict: ${report.decisionPack.verdict}
+- Decision: ${report.decisionPack.verdict}
 - Recommendation: ${report.decisionPack.recommendation}
 
-### Evaluated Scenario Basis
+### Settings Used
 
 ${renderList(report.decisionPack.preferredSettings, "None.")}
 
-### Blockers / Rejection Reasons
+### Blockers
 
 ${renderList(report.decisionPack.rejectedSettings, "None.")}
 
-### Imported Data Coverage
+### Data Completeness
 
 ${
   !report.decisionPack.historicalTruthCoverage
@@ -244,40 +244,40 @@ ${
     : `- Coverage: ${report.decisionPack.historicalTruthCoverage.status}
 - Summary: ${report.decisionPack.historicalTruthCoverage.summary}
 
-| Data Layer | Status | Detail |
+| Data Area | Status | Detail |
 | --- | --- | --- |
 ${report.decisionPack.historicalTruthCoverage.rows.map((row) => `| ${row.label} | ${row.status} | ${row.detail} |`).join("\n")}`
 }
 
-### Canonical Fidelity Audit
+### Source Detail Check
 
 ${
   !report.decisionPack.canonicalGapAudit
-    ? "No canonical fidelity audit."
+    ? "No source detail check."
     : `- Readiness: ${report.decisionPack.canonicalGapAudit.readiness}
 - Summary: ${report.decisionPack.canonicalGapAudit.summary}
 
-| Rule Family | Status | Detail |
+| Source Area | Status | Detail |
 | --- | --- | --- |
 ${report.decisionPack.canonicalGapAudit.rows.map((row) => `| ${row.label} | ${row.status} | ${row.detail} |`).join("\n")}`
 }
 
-### Token Flow Evidence
+### ALPHA Evidence
 
 ${
   !report.decisionPack.tokenFlowEvidence
-    ? "No token flow evidence summary."
+    ? "No ALPHA evidence summary."
     : `- Readiness: ${report.decisionPack.tokenFlowEvidence.readiness}
 - Summary: ${report.decisionPack.tokenFlowEvidence.summary}
 
-| Evidence Layer | Status | Value | Detail |
+| Evidence Area | Status | Value | Detail |
 | --- | --- | --- | --- |
 ${report.decisionPack.tokenFlowEvidence.rows.map((row) => `| ${row.label} | ${row.status} | ${row.value} | ${row.detail} |`).join("\n")}
 
-${renderList(report.decisionPack.tokenFlowEvidence.caveats, "No token flow caveats.")}`
+${renderList(report.decisionPack.tokenFlowEvidence.caveats, "No ALPHA evidence caveats.")}`
 }
 
-### Recommended Pilot Envelope
+### Recommended Setup
 
 ${
   !report.decisionPack.recommendedSetup
@@ -285,7 +285,7 @@ ${
     : `${report.decisionPack.adoptedBaselineSummary ? `- Current baseline: ${report.decisionPack.adoptedBaselineSummary}\n` : ""}- Title: ${report.decisionPack.recommendedSetup.title}
 - Summary: ${report.decisionPack.recommendedSetup.summary}
 
-| Setup Item | Value | Status | Rationale |
+| Setup Item | Value | Status | Why |
 | --- | --- | --- | --- |
 ${report.decisionPack.recommendedSetup.items.map((item) => `| ${item.label} | ${item.value} | ${item.status} | ${item.rationale} |`).join("\n")}
 
@@ -299,7 +299,7 @@ ${
   report.decisionPack.decisionLog.length === 0
     ? "No structured decision log."
     : [
-        "| Decision Item | Generated Status | Governance | Owner | Rationale / Resolution |",
+        "| Decision Item | Suggested Status | Review Status | Owner | Reason / Decision Note |",
         "| --- | --- | --- | --- | --- |",
         ...report.decisionPack.decisionLog.map(
           (entry) => `| ${entry.title} | ${entry.status} | ${entry.governanceStatus ?? "Draft"} | ${entry.owner} | ${entry.resolutionNote ?? entry.rationale} |`
@@ -321,7 +321,7 @@ ${
       ].join("\n")
 }
 
-### Strategic Goals
+### Goal Details
 
 ${
   report.decisionPack.strategicObjectives.length === 0
@@ -331,9 +331,9 @@ ${
           (objective) => `#### ${objective.title}
 
 - Status: ${objective.status}
-- Evidence: ${objective.evidence}
+- Data Support: ${objective.evidence}
 - Score: ${objective.score}
-- Primary metrics:
+- Main metrics:
 ${objective.primaryMetrics.map((item) => `  - ${item}`).join("\n") || "  - None"}
 - Reasons:
 ${objective.reasons.map((item) => `  - ${item}`).join("\n") || "  - None"}`
@@ -341,11 +341,11 @@ ${objective.reasons.map((item) => `  - ${item}`).join("\n") || "  - None"}`
         .join("\n\n")
 }
 
-### Milestone Checkpoints
+### Phase Checkpoints
 
 ${
   report.decisionPack.milestoneCheckpoints.length === 0
-    ? "No milestone checkpoints."
+    ? "No phase checkpoints."
     : report.decisionPack.milestoneCheckpoints
         .map(
           (milestone) => `#### ${milestone.title}
@@ -355,14 +355,14 @@ ${
 - Pressure: ${milestone.pressure}
 - Runway: ${milestone.runway}
 - Top 10% Share: ${milestone.topShare}
-- Net Treasury Delta: ${milestone.netDelta ?? "n/a"}
+- Net Cash Change: ${milestone.netDelta ?? "n/a"}
 - Reasons:
 ${milestone.reasons.map((item) => `  - ${item}`).join("\n") || "  - None"}`
         )
         .join("\n\n")
 }
 
-### Unresolved Questions
+### Open Questions
 
 ${renderList(report.decisionPack.unresolvedQuestions, "None.")}
 `;
@@ -491,7 +491,7 @@ export function renderSimulationResultCsv(report: SimulationResultExport) {
       "decision_pack",
       "verdict",
       "policy_verdict",
-      "Policy Verdict",
+      "Decision Summary",
       report.decisionPack.verdict,
       "",
       "",
@@ -504,11 +504,11 @@ export function renderSimulationResultCsv(report: SimulationResultExport) {
   );
 
   for (const item of report.decisionPack.preferredSettings) {
-    rows.push(renderCsvRow(["decision_pack", "scenario_basis", item, "Evaluated Scenario Basis", "", "", "", "", "", item, "", ""]));
+    rows.push(renderCsvRow(["decision_pack", "settings_used", item, "Settings Used", "", "", "", "", "", item, "", ""]));
   }
 
   for (const item of report.decisionPack.rejectedSettings) {
-    rows.push(renderCsvRow(["decision_pack", "blocker", item, "Blocker / Rejection Reason", "", "", "", "", "", item, "", ""]));
+    rows.push(renderCsvRow(["decision_pack", "blocker", item, "Blocker", "", "", "", "", "", item, "", ""]));
   }
 
   if (report.decisionPack.historicalTruthCoverage) {
@@ -517,7 +517,7 @@ export function renderSimulationResultCsv(report: SimulationResultExport) {
         "decision_pack",
         "historical_truth_coverage",
         "overall",
-        "Imported Data Coverage",
+        "Data Completeness",
         report.decisionPack.historicalTruthCoverage.status,
         "",
         "",
@@ -553,9 +553,9 @@ export function renderSimulationResultCsv(report: SimulationResultExport) {
     rows.push(
       renderCsvRow([
         "decision_pack",
-        "canonical_gap_audit",
+        "source_detail_check",
         "overall",
-        "Canonical Fidelity Audit",
+        "Source Detail Check",
         report.decisionPack.canonicalGapAudit.readiness,
         "",
         "",
@@ -571,7 +571,7 @@ export function renderSimulationResultCsv(report: SimulationResultExport) {
       rows.push(
         renderCsvRow([
           "decision_pack",
-          "canonical_gap_audit_row",
+          "source_detail_check_row",
           row.label,
           row.label,
           row.status,
@@ -593,7 +593,7 @@ export function renderSimulationResultCsv(report: SimulationResultExport) {
         "decision_pack",
         "token_flow_evidence",
         "overall",
-        "Token Flow Evidence",
+        "ALPHA Evidence",
         report.decisionPack.tokenFlowEvidence.readiness,
         "",
         "",
@@ -630,7 +630,7 @@ export function renderSimulationResultCsv(report: SimulationResultExport) {
           "decision_pack",
           "token_flow_caveat",
           caveat,
-          "Token Flow Caveat",
+          "ALPHA Evidence Caveat",
           "",
           "",
           "",
@@ -809,7 +809,7 @@ export function renderSimulationResultCsv(report: SimulationResultExport) {
         "",
         "",
         milestone.pressure,
-        `Runway: ${milestone.runway}; Top 10% Share: ${milestone.topShare}; Net Treasury Delta: ${
+        `Runway: ${milestone.runway}; Top 10% Share: ${milestone.topShare}; Net Cash Change: ${
           milestone.netDelta ?? "n/a"
         }`,
         milestone.reasons.join(" | ")
@@ -818,7 +818,7 @@ export function renderSimulationResultCsv(report: SimulationResultExport) {
   }
 
   for (const item of report.decisionPack.unresolvedQuestions) {
-    rows.push(renderCsvRow(["decision_pack", "unresolved_question", item, "Unresolved Question", "", "", "", "", "", item, "", ""]));
+    rows.push(renderCsvRow(["decision_pack", "open_question", item, "Open Question", "", "", "", "", "", item, "", ""]));
   }
 
   return rows.join("\n");

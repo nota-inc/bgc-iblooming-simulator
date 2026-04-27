@@ -377,15 +377,33 @@ export function parseCanonicalCsvSnapshotText(text: string): CanonicalSnapshotPa
 
     switch (target) {
       case "members":
-        payload.members.push({
-          snapshot_id: snapshotId,
-          stable_key: requireField(row, "stable_key", rowRef),
-          display_name: readOptionalString(row, "display_name"),
-          metadata: buildMetadata(row, rowRef, {
-            group_key: readOptionalString(row, "group_key"),
-            join_period: readOptionalString(row, "join_period")
-          })
-        });
+        {
+          const stableKey = requireField(row, "stable_key", rowRef);
+          const memberSourceSystem = readOptionalString(row, "source_system");
+          const memberAliasKey = readOptionalString(row, "alias_key");
+
+          payload.members.push({
+            snapshot_id: snapshotId,
+            stable_key: stableKey,
+            display_name: readOptionalString(row, "display_name"),
+            metadata: buildMetadata(row, rowRef, {
+              group_key: readOptionalString(row, "group_key"),
+              join_period: readOptionalString(row, "join_period")
+            })
+          });
+
+          if (memberSourceSystem || memberAliasKey) {
+            payload.member_aliases.push({
+              snapshot_id: snapshotId,
+              member_stable_key: stableKey,
+              source_system: requireSourceSystem(row, "source_system", rowRef),
+              alias_key: requireField(row, "alias_key", rowRef),
+              alias_type: readOptionalString(row, "alias_type") ?? "member_id",
+              confidence: readOptionalNumber(row, "confidence", rowRef),
+              metadata: null
+            });
+          }
+        }
         break;
       case "member_aliases":
         payload.member_aliases.push({
