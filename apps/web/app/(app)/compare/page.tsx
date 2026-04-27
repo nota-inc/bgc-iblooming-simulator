@@ -6,6 +6,7 @@ import { PageHeader } from "@bgc-alpha/ui";
 
 import { CompareConsole } from "@/components/compare-console";
 import { requirePageUser } from "@/lib/auth-session";
+import { getScenarioModeCaveat, getScenarioModeLabel } from "@/lib/common-language";
 import { compareMetricKeys, compareMetricOptimization } from "@/lib/compare-config";
 import {
   formatStrategicMetricValue,
@@ -81,12 +82,16 @@ export default async function ComparePage() {
       verdict,
       parameters: {
         ...parameters,
+        scenario_mode_label: getScenarioModeLabel(parameters.scenario_mode),
+        forecast_mode_caveat: getScenarioModeCaveat(parameters.scenario_mode),
         milestone_count: parameters.milestone_schedule.length,
         cohort_projection_label:
           parameters.cohort_assumptions.new_members_per_month === 0 &&
           parameters.cohort_assumptions.monthly_churn_rate_pct === 0 &&
           parameters.cohort_assumptions.monthly_reactivation_rate_pct === 0
-            ? "disabled in founder-safe mode"
+            ? parameters.scenario_mode === "advanced_forecast"
+              ? "on, but growth assumptions are still 0"
+              : "off in Imported Data Only"
             : `${parameters.cohort_assumptions.new_members_per_month} new/mo · ${parameters.cohort_assumptions.monthly_churn_rate_pct}% churn · ${parameters.cohort_assumptions.monthly_reactivation_rate_pct}% reactivation`
       },
       strategicObjectives,

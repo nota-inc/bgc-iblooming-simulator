@@ -95,6 +95,7 @@ export default async function TreasuryPage({
       <nav className="tab-nav">
         <Link href={`/runs/${run.id}`} className="tab-item">Summary</Link>
         <Link href={`/distribution/${run.id}`} className="tab-item">Distribution</Link>
+        <Link href={`/token-flow/${run.id}`} className="tab-item">Token Flow</Link>
         <Link href={`/treasury/${run.id}`} className="tab-item active">Treasury</Link>
         <Link href={`/decision-pack/${run.id}`} className="tab-item">Decision Pack</Link>
       </nav>

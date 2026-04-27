@@ -31,6 +31,8 @@ import {
   getPolicyStatusLabel,
   getRunReference,
   getRunStatusLabel,
+  getScenarioModeCaveat,
+  getScenarioModeLabel,
   getSegmentKeyLabel,
   getTruthClassificationLabel
 } from "@/lib/common-language";
@@ -289,12 +291,16 @@ function buildCompareReport(runs: CompareRunRecord[]) {
           adoptedBaselineNote: run.scenario.adoptedBaselineNote ?? null,
           parameters: {
             ...parameters,
+            scenario_mode_label: getScenarioModeLabel(parameters.scenario_mode),
+            forecast_mode_caveat: getScenarioModeCaveat(parameters.scenario_mode),
             milestone_count: parameters.milestone_schedule.length,
             cohort_projection_label:
               parameters.cohort_assumptions.new_members_per_month === 0 &&
               parameters.cohort_assumptions.monthly_churn_rate_pct === 0 &&
               parameters.cohort_assumptions.monthly_reactivation_rate_pct === 0
-                ? "disabled in founder-safe mode"
+                ? parameters.scenario_mode === "advanced_forecast"
+                  ? "on, but growth assumptions are still 0"
+                  : "off in Imported Data Only"
                 : `${parameters.cohort_assumptions.new_members_per_month} new/mo · ${parameters.cohort_assumptions.monthly_churn_rate_pct}% churn · ${parameters.cohort_assumptions.monthly_reactivation_rate_pct}% reactivation`
           }
         }
@@ -315,6 +321,8 @@ function buildCompareReport(runs: CompareRunRecord[]) {
           run.summaryMetrics.map((metric) => [metric.metricKey, metric.metricValue] as const)
         ) as Record<string, number>,
         parameters: extra?.parameters ?? {
+          scenario_mode_label: "Imported Data Only",
+          forecast_mode_caveat: null,
           k_pc: 1,
           k_sp: 1,
           reward_global_factor: 1,
@@ -407,9 +415,9 @@ function buildCompareReport(runs: CompareRunRecord[]) {
   };
 
   const getParameterClassificationLabel = (classification: string) => {
-    if (classification === "scenario_lever") return "Scenario Lever";
-    if (classification === "scenario_assumption") return "Scenario Assumption";
-    return "Locked Boundary";
+    if (classification === "scenario_lever") return "Editable";
+    if (classification === "scenario_assumption") return "Assumption";
+    return "Locked";
   };
 
   const getFounderQuestionStatusLabel = (status: string) => {
@@ -427,7 +435,7 @@ function buildCompareReport(runs: CompareRunRecord[]) {
 
   return {
     title: `Compare Report · ${runs.length} Selected Scenario${runs.length === 1 ? "" : "s"}`,
-    subtitle: "Scenario comparison exported with the same structure as the Compare tab: simulation summary, executive status memo, radar, decision snapshot, financial scenario view, cashflow, truth coverage, canonical fidelity audit, recommended pilot envelope, parameter registry, parameter ranges, founder question queue, technical implementation plan, decision governance, ALPHA policy, treasury risk, distribution, goals, milestones, and run context.",
+    subtitle: "Compare export includes simulation summary, status memo, radar, decisions, cashflow, data coverage, pilot recommendation, parameters, founder questions, technical plan, treasury risk, distribution, goals, milestones, and run context.",
     generatedAt: new Intl.DateTimeFormat("en-US", {
       dateStyle: "medium",
       timeStyle: "short"
@@ -541,13 +549,13 @@ function buildCompareReport(runs: CompareRunRecord[]) {
       },
       {
         title: "Business Cashflow Comparison",
-        subtitle: "Company cashflow truth. Fiat/cashflow values are shown in $ and kept separate from ALPHA policy movement.",
+        subtitle: "Company cashflow. Fiat/cashflow values are shown in $ and kept separate from ALPHA movement.",
         rowLabel: "Cashflow Metric",
         rows: buildMetricRows(runs, compareCashflowMetricKeys)
       },
       {
-        title: "Historical Truth Coverage",
-        subtitle: "Canonical and derived truth coverage behind each selected run.",
+        title: "Imported Data Coverage",
+        subtitle: "Summary of how complete the imported data is behind each run.",
         rowLabel: "Coverage Layer",
         rows: [
           {
@@ -556,7 +564,7 @@ function buildCompareReport(runs: CompareRunRecord[]) {
               const coverage = extrasByRunId.get(run.id)?.historicalTruthCoverage;
               return {
                 primary: getHistoricalTruthCoverageLabel(coverage?.status ?? "weak"),
-                secondary: coverage?.summary ?? "No truth coverage summary recorded.",
+                secondary: coverage?.summary ?? "No imported data coverage summary yet.",
                 tone: getTone(coverage?.status === "strong" ? "candidate" : coverage?.status === "partial" ? "risky" : "rejected")
               };
             })
@@ -749,9 +757,9 @@ function buildCompareReport(runs: CompareRunRecord[]) {
             },
             {
               primary: getParameterClassificationLabel(row.classification),
-              secondary: `Guardrail: ${
+              secondary: `Status: ${
                 row.guardrailStatus === "allowed"
-                  ? "Allowed"
+                  ? "Editable"
                   : row.guardrailStatus === "conditional"
                     ? "Assumption"
                     : "Locked"
@@ -892,8 +900,8 @@ function buildCompareReport(runs: CompareRunRecord[]) {
         })
       },
       {
-        title: "Truth vs Assumption Matrix",
-        subtitle: "Historical truth, scenario levers, assumptions, locked boundaries, and derived assessments kept explicitly separate.",
+        title: "Data vs Assumptions",
+        subtitle: "Imported data, editable values, assumptions, locked limits, and calculated results are kept separate.",
         rowLabel: "Item",
         rows: decisionSupport.truthAssumptionMatrix.map((item) => ({
           label: item.label,

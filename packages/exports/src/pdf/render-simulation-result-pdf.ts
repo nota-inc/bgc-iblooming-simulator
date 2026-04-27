@@ -812,7 +812,7 @@ function drawHistoricalTruthCoverageTable(layout: PdfLayout, report: SimulationR
           ...coverage.rows.map((row) => [row.label, row.status, row.detail])
         ]
       : [],
-    "No historical truth coverage summary."
+    "No imported data coverage summary."
   );
 }
 
@@ -1140,7 +1140,7 @@ export function renderSimulationResultStyledPdf(report: SimulationResultExport) 
     report.decisionPack.rejectedSettings
   );
 
-  drawSectionTitle(layout, "Historical Truth Coverage", "Canonical and derived truth coverage behind this run.");
+  drawSectionTitle(layout, "Imported Data Coverage", "Shows how much source data supports this run.");
   drawHistoricalTruthCoverageTable(layout, report);
 
   drawSectionTitle(layout, "Canonical Fidelity Audit", "Rule-family audit for where stronger event-native closure is still needed.");
@@ -1152,7 +1152,7 @@ export function renderSimulationResultStyledPdf(report: SimulationResultExport) 
   drawSectionTitle(layout, "Decision Log", "What is fixed by truth, recommended by evidence, or still pending.");
   drawDecisionLogTable(layout, report);
 
-  drawSectionTitle(layout, "Truth vs Assumption Matrix", "Explicit separation between historical truth, scenario levers, assumptions, and locked boundaries.");
+  drawSectionTitle(layout, "Data vs Assumptions", "Separates imported data, editable values, assumptions, and locked limits.");
   drawTruthAssumptionTable(layout, report);
 
   drawSectionTitle(layout, "Strategic Goals");

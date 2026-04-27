@@ -52,6 +52,8 @@ type RunExtra = {
   runId: string;
   verdict: string;
   parameters: {
+    scenario_mode_label: string;
+    forecast_mode_caveat: string | null;
     k_pc: number;
     k_sp: number;
     reward_global_factor: number;
@@ -383,6 +385,8 @@ export function CompareConsole({
           ),
           parameters:
             extra?.parameters ?? {
+              scenario_mode_label: "Imported Data Only",
+              forecast_mode_caveat: null,
               k_pc: 1,
               k_sp: 1,
               reward_global_factor: 1,
@@ -397,7 +401,7 @@ export function CompareConsole({
               cashout_window_days: 0,
               projection_horizon_months: null,
               milestone_count: 0,
-              cohort_projection_label: "disabled in founder-safe mode"
+              cohort_projection_label: "off in Imported Data Only"
             },
           historicalTruthCoverage: extra?.historicalTruthCoverage ?? null,
           strategicObjectives: extra?.strategicObjectives ?? [],
@@ -437,9 +441,9 @@ export function CompareConsole({
   }
 
   function getDecisionLogStatusLabel(status: string) {
-    if (status === "fixed_truth") return "Fixed Truth";
+    if (status === "fixed_truth") return "Imported Data";
     if (status === "recommended") return "Recommended";
-    if (status === "pending_founder") return "Founder Decision";
+    if (status === "pending_founder") return "Decision Needed";
     if (status === "blocked") return "Blocked";
     return status;
   }
@@ -447,15 +451,15 @@ export function CompareConsole({
   function getTruthClassificationLabel(classification: string) {
     switch (classification) {
       case "historical_truth":
-        return "Historical Truth";
+        return "Imported Data";
       case "scenario_lever":
-        return "Scenario Lever";
+        return "Editable";
       case "scenario_assumption":
-        return "Scenario Assumption";
+        return "Assumption";
       case "locked_boundary":
-        return "Locked Boundary";
+        return "Locked";
       case "derived_assessment":
-        return "Derived Assessment";
+        return "Calculated";
       default:
         return classification;
     }
@@ -488,9 +492,9 @@ export function CompareConsole({
   }
 
   function getParameterClassificationLabel(classification: string) {
-    if (classification === "scenario_lever") return "Scenario Lever";
-    if (classification === "scenario_assumption") return "Scenario Assumption";
-    return "Locked Boundary";
+    if (classification === "scenario_lever") return "Editable";
+    if (classification === "scenario_assumption") return "Assumption";
+    return "Locked";
   }
 
   function getParameterClassificationBadge(classification: string) {
@@ -745,7 +749,7 @@ export function CompareConsole({
           <div className="card span-12">
             <h3>Scenario Profile Radar</h3>
             <p className="muted compare-section-note">
-              Visual overlay for quick scanning only. Use the cashflow and treasury tables as the decision source of truth.
+              Quick scan view only. Use the cashflow and treasury tables as the main decision source.
             </p>
             <CompareRadarChart dimensions={radarData.dimensions} series={radarData.series} />
           </div>
@@ -755,7 +759,7 @@ export function CompareConsole({
           <div className="card span-12">
             <h3>Simulation Summary</h3>
             <p className="muted compare-section-note">
-              Compare-level readout designed for founder review. This keeps the selected scenarios, strongest current envelope, treasury posture, and truth posture in one place before diving into detailed tables.
+              Compare summary for founder review: selected scenarios, current strongest choice, treasury posture, and data coverage.
             </p>
             <div className="decision-summary">
               <div className="decision-summary__verdict">
@@ -880,6 +884,11 @@ export function CompareConsole({
                       <span className={`badge ${getVerdictBadge(extra?.verdict ?? "pending")}`}>
                         {getPolicyStatusLabel(extra?.verdict ?? "pending")}
                       </span>
+                      {extra ? (
+                        <span className={`badge ${extra.parameters.forecast_mode_caveat ? "badge--risky" : "badge--info"}`}>
+                          {extra.parameters.scenario_mode_label}
+                        </span>
+                      ) : null}
                       {extra?.adoptedBaselineRunId === run.id ? (
                         <span className="badge badge--info">Current Baseline</span>
                       ) : null}
@@ -902,6 +911,11 @@ export function CompareConsole({
                         <strong>{formatMonthCountLabel(runway)}</strong>
                       </span>
                     </div>
+                    {extra?.parameters.forecast_mode_caveat ? (
+                      <p className="muted" style={{ marginTop: "0.75rem" }}>
+                        {extra.parameters.forecast_mode_caveat}
+                      </p>
+                    ) : null}
                     {extra?.adoptedBaselineRunId === run.id && extra.adoptedBaselineAt ? (
                       <p className="muted" style={{ marginTop: "0.75rem" }}>
                         Adopted {new Date(extra.adoptedBaselineAt).toLocaleString("en-US")}
@@ -980,16 +994,16 @@ export function CompareConsole({
         {filteredRuns.length > 0
           ? renderMetricTable(
               "Business Cashflow Comparison",
-              "Company cashflow truth. Fiat/cashflow values are shown in $ and kept separate from ALPHA policy movement.",
+              "Company cashflow. Fiat/cashflow values are shown in $ and kept separate from ALPHA movement.",
               compareCashflowMetricKeys
             )
           : null}
 
         {filteredRuns.length > 0 ? (
           <div className="card span-12">
-            <h3>Historical Truth Coverage</h3>
+            <h3>Imported Data Coverage</h3>
             <p className="muted compare-section-note">
-              Canonical and derived truth coverage behind each selected run. This closes the gap between scenario discussion and the actual stored business evidence.
+              Summary of how complete the imported data is behind each run.
             </p>
             <div className="table-wrap">
               <table className="table">
@@ -1012,7 +1026,7 @@ export function CompareConsole({
                             <span className={`badge ${getVerdictBadge(coverage?.status === "strong" ? "candidate" : coverage?.status === "partial" ? "risky" : "rejected")}`}>
                               {coverage?.status ?? "weak"}
                             </span>
-                            {coverage?.summary ? <p>{coverage.summary}</p> : <p>No truth coverage summary recorded.</p>}
+                            {coverage?.summary ? <p>{coverage.summary}</p> : <p>No imported data coverage summary yet.</p>}
                           </div>
                         </td>
                       );
@@ -1123,7 +1137,7 @@ export function CompareConsole({
           <div className="card span-12">
             <h3>Recommended Pilot Envelope</h3>
             <p className="muted compare-section-note">
-              Compare-level recommendation. This is the strongest current pilot envelope across the selected runs, not a claim that historical truth itself changed.
+              Recommendation from compared runs. This is the strongest current policy choice, not a change to imported data.
             </p>
             <div className="decision-summary">
               <div className="decision-summary__verdict">
@@ -1224,9 +1238,9 @@ export function CompareConsole({
                             {getParameterClassificationLabel(row.classification)}
                           </span>
                           <small>
-                            Guardrail: {
+                            Status: {
                               row.guardrailStatus === "allowed"
-                                ? "Allowed"
+                                ? "Editable"
                                 : row.guardrailStatus === "conditional"
                                   ? "Assumption"
                                   : "Locked"
@@ -1253,7 +1267,7 @@ export function CompareConsole({
                 <thead>
                   <tr>
                     <th>Parameter</th>
-                    <th>Guardrail</th>
+                    <th>Status</th>
                     <th>Recommended Range</th>
                     <th>Caution Range</th>
                     <th>Rejected Range</th>
@@ -1270,7 +1284,7 @@ export function CompareConsole({
                       </td>
                       <td>
                         <span className={`badge ${row.guardrailStatus === "allowed" ? "badge--candidate" : row.guardrailStatus === "conditional" ? "badge--risky" : "badge--neutral"}`}>
-                          {row.guardrailStatus === "allowed" ? "Allowed" : row.guardrailStatus === "conditional" ? "Assumption" : "Locked"}
+                          {row.guardrailStatus === "allowed" ? "Editable" : row.guardrailStatus === "conditional" ? "Assumption" : "Locked"}
                         </span>
                       </td>
                       <td>{row.recommendedValues}</td>
@@ -1423,16 +1437,16 @@ export function CompareConsole({
 
         {filteredRuns.length > 0 ? (
           <div className="card span-12">
-            <h3>Truth vs Assumption Matrix</h3>
+            <h3>Data vs Assumptions</h3>
             <p className="muted compare-section-note">
-              This matrix keeps historical truth, scenario levers, conditional assumptions, locked boundaries, and derived assessments visibly separate.
+              This section separates imported data, editable values, assumptions, locked limits, and calculated results.
             </p>
             <div className="table-wrap">
               <table className="table">
                 <thead>
                   <tr>
                     <th>Item</th>
-                    <th>Classification</th>
+                    <th>Status</th>
                     <th>Value</th>
                     <th>Note</th>
                   </tr>

@@ -21,6 +21,8 @@ type GuardrailStatus = "allowed" | "conditional" | "locked";
 type ParameterKind = "number" | "currency" | "percent" | "string" | "integer" | "months";
 
 export type CompareDecisionSupportParameters = {
+  scenario_mode_label: string;
+  forecast_mode_caveat: string | null;
   k_pc: number;
   k_sp: number;
   reward_global_factor: number;
@@ -216,24 +218,34 @@ type ParameterDescriptor = {
 
 const parameterDescriptors: ParameterDescriptor[] = [
   {
+    key: "scenario_mode_label",
+    symbol: "scenario_mode",
+    label: "Scenario mode",
+    description: "Controls whether the run uses imported data only or adds a forecast.",
+    kind: "string",
+    guardrailStatus: "conditional",
+    decisionOwner: "Founder / Strategy",
+    rationale: "Add Forecast must be labeled as estimate-based, not observed data."
+  },
+  {
     key: "k_pc",
     symbol: "k_pc",
     label: "k_pc",
-    description: "PC-to-ALPHA conversion coefficient applied on top of fixed PC truth.",
+    description: "Pengali konversi PC ke ALPHA.",
     kind: "number",
     guardrailStatus: "allowed",
     decisionOwner: "Founder / Tokenomics",
-    rationale: "Allowed ALPHA conversion overlay on top of PC truth."
+    rationale: "Editable PC-to-ALPHA conversion."
   },
   {
     key: "k_sp",
     symbol: "k_sp",
     label: "k_sp",
-    description: "SP-to-ALPHA conversion coefficient applied on top of fixed SP/LTS truth.",
+    description: "Pengali konversi SP/LTS ke ALPHA.",
     kind: "number",
     guardrailStatus: "allowed",
     decisionOwner: "Founder / Tokenomics",
-    rationale: "Allowed ALPHA conversion overlay on top of SP/LTS truth."
+    rationale: "Editable SP/LTS-to-ALPHA conversion."
   },
   {
     key: "cap_user_monthly",
@@ -303,7 +315,7 @@ const parameterDescriptors: ParameterDescriptor[] = [
     kind: "integer",
     guardrailStatus: "conditional",
     decisionOwner: "Founder / Finance / Ops",
-    rationale: "Cash-out windows are scenario assumptions, not historical truth."
+    rationale: "Cash-out schedule is a scenario assumption, not observed data."
   },
   {
     key: "cashout_window_days",
@@ -313,7 +325,7 @@ const parameterDescriptors: ParameterDescriptor[] = [
     kind: "integer",
     guardrailStatus: "conditional",
     decisionOwner: "Founder / Ops",
-    rationale: "Cash-out window duration is a scenario assumption, not historical truth."
+    rationale: "Cash-out window length is a scenario assumption, not observed data."
   },
   {
     key: "projection_horizon_months",
@@ -333,7 +345,7 @@ const parameterDescriptors: ParameterDescriptor[] = [
     kind: "integer",
     guardrailStatus: "conditional",
     decisionOwner: "Founder / PMO",
-    rationale: "Milestone schedule is a staged policy assumption, not historical truth."
+    rationale: "Milestone schedule is a staged policy assumption, not observed data."
   }
 ];
 
@@ -525,7 +537,7 @@ export function buildRecommendedPilotEnvelope(
   ];
 
   if (bestRun.historicalTruthCoverage) {
-    reasons.push(`Historical truth coverage is ${bestRun.historicalTruthCoverage.status}.`);
+    reasons.push(`Imported data coverage: ${bestRun.historicalTruthCoverage.status}.`);
   }
 
   const firstDecisionBlocker = bestRun.decisionLog.find((entry) => entry.status === "blocked");
@@ -718,12 +730,13 @@ export function buildCompareSimulationSummary(
   const coverage = buildCoverageSummary(runs);
   const uniqueVerdicts = [...new Set(runs.map((run) => run.verdict))];
   const bestRun = runs.find((run) => run.id === recommendedEnvelope.recommendedRunId) ?? sortRunsForRecommendation(runs)[0];
+  const advancedForecastRuns = runs.filter((run) => run.parameters.forecast_mode_caveat);
 
   return {
     status: recommendedEnvelope.status,
     summary:
       recommendedEnvelope.status === "recommended"
-        ? "Selected runs already produce a usable pilot envelope, but the historical truth layer still needs to stay explicit."
+        ? "Selected runs are usable for a pilot package, but the imported data source must stay clear."
         : recommendedEnvelope.status === "review"
           ? "Selected runs produce a working review envelope, but founder review is still needed before anything is treated as a default."
           : "Selected runs are still blocked from becoming a defensible pilot envelope and should be read as exploration only.",
@@ -738,15 +751,28 @@ export function buildCompareSimulationSummary(
             : `${snapshotNames.length} snapshots selected`,
         implication:
           snapshotNames.length === 1
-            ? "All compared runs sit on the same imported business truth."
-            : "Mixed snapshot truth reduces founder confidence in the comparison."
+            ? "All compared runs use the same imported data."
+            : "Mixed snapshots make the comparison harder to trust."
       },
       {
         key: "scenario_set",
         label: "Scenario set",
         status: "info",
         currentReadout: labels.join(", "),
-        implication: "This compare set tests policy overlays on top of fixed imported history, not rewritten historical truth."
+        implication: "This compare set tests policy on top of imported data; it does not rewrite past data."
+      },
+      {
+        key: "scenario_mode",
+        label: "Scenario mode",
+        status: advancedForecastRuns.length > 0 ? "review" : "ready",
+        currentReadout:
+          advancedForecastRuns.length > 0
+            ? `${advancedForecastRuns.length} forecast run`
+            : "Imported data only",
+        implication:
+          advancedForecastRuns.length > 0
+            ? "Compare and Whitepaper must describe growth assumptions as estimates."
+            : "Growth Forecast is off in all selected runs."
       },
       {
         key: "recommendation",
@@ -821,6 +847,7 @@ export function buildCompareExecutiveStatusMemo(
   const top10Shares = runs.map((run) => run.summaryMetrics.reward_concentration_top10_pct ?? 0);
   const pendingFounder = founderQuestionQueue.filter((row) => row.status === "pending_founder").length;
   const blockedFounder = founderQuestionQueue.filter((row) => row.status === "blocked").length;
+  const advancedForecastRuns = runs.filter((run) => run.parameters.forecast_mode_caveat);
   const mainBlocker =
     Math.max(...top10Shares) > 60
       ? "Reward concentration"
@@ -861,13 +888,13 @@ export function buildCompareExecutiveStatusMemo(
       },
       {
         key: "working_truth_basis",
-        label: "Working truth basis",
+        label: "Dasar data kerja",
         status: coverage.weak > 0 || coverage.partial > 0 ? "review" : "ready",
         currentReadout: `${coverage.strong} strong · ${coverage.partial} partial · ${coverage.weak} weak`,
         implication:
           coverage.weak > 0 || coverage.partial > 0
-            ? "Accepted hybrid truth is usable for working drafts, but canonical-gap caveats must stay visible."
-            : "Truth coverage is strong enough to support tighter founder claims."
+            ? "Accepted hybrid data can be used for drafts, but data-gap caveats must stay visible."
+            : "Data coverage is strong enough for clearer claims."
       },
       {
         key: "current_envelope",
@@ -883,6 +910,19 @@ export function buildCompareExecutiveStatusMemo(
           bestRun
             ? "Use this run as the current working anchor for summary, Whitepaper v1, and Tokenflow v1 updates."
             : "No stable anchor exists yet."
+      },
+      {
+        key: "forecast_caveat",
+        label: "Forecast caveat",
+        status: advancedForecastRuns.length > 0 ? "review" : "ready",
+        currentReadout:
+          advancedForecastRuns.length > 0
+            ? `${advancedForecastRuns.length} forecast run`
+            : "Imported data only",
+        implication:
+          advancedForecastRuns.length > 0
+            ? "Documents can use these outputs only if forecast assumptions are clearly stated."
+            : "Scenario mode adds no growth caveat."
       },
       {
         key: "main_blocker",
@@ -962,14 +1002,14 @@ export function buildCompareTechnicalImplementationPlan(
     rows: [
       {
         key: "truth_basis_lock",
-        label: "Lock working truth basis",
+        label: "Lock the working data basis",
         owner: "Data / Ops / Legal",
         status: hasWorkingTruthGap ? "in_progress" : "ready",
         nextAction:
           hasWorkingTruthGap
-            ? "Treat accepted hybrid truth as the working basis and keep canonical-gap caveats explicit in v1 documents."
-            : "Use the selected snapshot truth as the founder-facing basis without extra caveat escalation.",
-        whyItMatters: "All downstream Simulation Summary, Whitepaper, and Tokenflow drafting depends on a stable truth basis."
+            ? "Use the accepted hybrid data as the working basis and keep data-gap caveats visible in v1 documents."
+            : "Use the selected snapshot as the founder-facing basis.",
+        whyItMatters: "Simulation Summary, Whitepaper, and Token Flow need a stable data basis."
       },
       {
         key: "pilot_envelope_lock",
@@ -1105,11 +1145,11 @@ export function buildCompareFounderQuestionQueue(
     questions.push({
       key: "working_truth_posture",
       status: "pending_founder",
-      question: "Can the accepted hybrid snapshot be treated as the working truth basis for v1 documents?",
-      whyNow: decisionLog.find((entry) => entry.key === "truth_coverage_gap")?.rationale ?? "Truth coverage is not uniformly strong across the selected set.",
+      question: "Can the accepted hybrid snapshot be used as the basis for v1 documents?",
+      whyNow: decisionLog.find((entry) => entry.key === "truth_coverage_gap")?.rationale ?? "Data coverage is not equally strong across all runs.",
       decisionOwner: "Founder / Data / Legal",
-      recommendedDirection: "Use accepted hybrid truth for Simulation Summary, Whitepaper v1, and Tokenflow v1 working drafts, while keeping canonical-gap caveats explicit.",
-      decisionOptions: "Use as working basis with caveat · Delay document closure until stronger truth coverage · Narrow claims to fully covered areas only"
+      recommendedDirection: "Use the accepted hybrid data for Simulation Summary, Whitepaper v1, and Token Flow v1 drafts, with data-gap caveats kept visible.",
+      decisionOptions: "Use as working basis with caveats · Delay documents until data is stronger · Limit claims to fully covered areas"
     });
   }
 
@@ -1145,10 +1185,10 @@ export function buildCompareDecisionLog(
   const log: CompareDecisionLogEntry[] = [
     {
       key: "understanding_doc_truth",
-      title: "Historical business truth stays fixed across compared runs",
+      title: "Imported business data stays unchanged saat compare",
       status: "fixed_truth",
       owner: "Understanding Doc",
-      rationale: "Compare reads selected scenarios on top of snapshot truth; scenario overlays do not rewrite imported reward or cashflow history."
+      rationale: "Compare reads scenarios on top of snapshot data; scenarios do not rewrite reward or cashflow data."
     },
     {
       key: "pilot_envelope_recommendation",
@@ -1173,17 +1213,17 @@ export function buildCompareDecisionLog(
       title: "Conditional policy assumptions still need founder choice",
       status: "pending_founder",
       owner: "Founder",
-      rationale: `The compared runs still vary on ${pendingFounderLevers.join(", ")}. These must be explicitly chosen as assumptions rather than treated as historical truth.`
+      rationale: `Compared runs still vary on ${pendingFounderLevers.join(", ")}. Choose these as assumptions, not observed data.`
     });
   }
 
   if (coverage.partial > 0 || coverage.weak > 0) {
     log.push({
       key: "truth_coverage_gap",
-      title: "Historical truth coverage is not uniformly strong",
+      title: "Imported data coverage is not consistent yet",
       status: "blocked",
       owner: "Data / Ops",
-      rationale: `${coverage.strong} strong, ${coverage.partial} partial, and ${coverage.weak} weak snapshot-truth coverage states are present in the selected runs.`
+      rationale: `${coverage.strong} strong, ${coverage.partial} partial, and ${coverage.weak} weak appear in the selected runs.`
     });
   }
 
@@ -1216,21 +1256,33 @@ export function buildCompareTruthAssumptionMatrix(
 ): CompareTruthAssumptionRow[] {
   const snapshotNames = [...new Set(runs.map((run) => run.snapshotName))];
   const coverage = buildCoverageSummary(runs);
+  const modeLabels = [...new Set(runs.map((run) => run.parameters.scenario_mode_label))];
+  const advancedForecastRuns = runs.filter((run) => run.parameters.forecast_mode_caveat);
 
   const baseRows: CompareTruthAssumptionRow[] = [
     {
       key: "snapshot_truth",
-      label: "Approved snapshot truth",
+      label: "Approved snapshot",
       value: snapshotNames.length === 1 ? snapshotNames[0] : `${snapshotNames.length} snapshots selected`,
       classification: "historical_truth",
-      note: "Imported reward distributions and recognized revenue support remain the historical basis underneath compare."
+      note: "Imported reward distribution and recognized revenue are the compare basis."
     },
     {
       key: "truth_coverage",
-      label: "Historical truth coverage",
+      label: "Imported data coverage",
       value: `${coverage.strong} strong · ${coverage.partial} partial · ${coverage.weak} weak`,
       classification: "derived_assessment",
-      note: "Canonical/event-ledger coverage is summarized so founder claims stay calibrated to actual stored truth."
+      note: "Data coverage is summarized so founder claims stay aligned with stored data."
+    },
+    {
+      key: "scenario_mode",
+      label: "Scenario mode",
+      value: modeLabels.join(", "),
+      classification: advancedForecastRuns.length > 0 ? "scenario_assumption" : "locked_boundary",
+      note:
+        advancedForecastRuns.length > 0
+          ? "At least one run uses Add Forecast, so growth assumptions need a caveat."
+          : "All runs use imported data only."
     }
   ];
 
@@ -1250,16 +1302,22 @@ export function buildCompareTruthAssumptionMatrix(
   parameterRows.push({
     key: "reward_factor_lock",
     label: "Global / pool reward factors",
-    value: "locked to neutral baseline",
+    value: "locked to core formula",
     classification: "locked_boundary",
-    note: "Generic reward multipliers stay locked so named understanding-doc reward semantics are not distorted."
+    note: "Locked so the core reward formula does not change during scenario comparison."
   });
   parameterRows.push({
     key: "cohort_projection_lock",
-    label: "Synthetic cohort projection",
-    value: "disabled in founder-safe mode",
-    classification: "locked_boundary",
-    note: "Synthetic member growth, churn, and reactivation are not treated as faithful historical truth."
+    label: "Growth Forecast",
+    value:
+      advancedForecastRuns.length > 0
+        ? advancedForecastRuns.map((run) => `${run.label}: ${run.parameters.cohort_projection_label}`).join("; ")
+        : "off in Imported Data Only",
+    classification: advancedForecastRuns.length > 0 ? "scenario_assumption" : "locked_boundary",
+    note:
+      advancedForecastRuns.length > 0
+        ? "New-member, churn, and reactivation forecasts are on in selected runs."
+        : "New members, churn, and reactivation are not forecast when the run uses imported data only."
   });
 
   return [...baseRows, ...parameterRows];

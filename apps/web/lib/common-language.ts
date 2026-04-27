@@ -29,19 +29,31 @@ const segmentTypeLabels: Record<string, string> = {
 };
 
 const segmentKeyLabels: Record<string, string> = {
+  actual_spend: "Actual Used",
   bgc: "BGC",
+  burn_expire: "Expired / Burned",
   cashout: "Cash-Out",
+  ending_balance: "Ending Balance",
   hold: "Held",
   iblooming: "iBLOOMING",
+  modeled_spend: "Modeled Used",
   unknown: "Unclassified",
   spend: "Used"
 };
 
 const metricLabels: Record<string, string> = {
+  actual_sink_utilization_rate: "Actual Sink Utilization",
+  alpha_actual_spent_total: "Actual ALPHA Spent",
   alpha_cashout_equivalent_total: "Cash-Out Equivalent",
+  alpha_ending_balance_total: "Ending ALPHA Balance",
+  alpha_expired_burned_total: "Expired / Burned ALPHA",
   alpha_issued_total: "ALPHA Issued",
+  alpha_modeled_spent_total: "Modeled ALPHA Spent",
+  alpha_opening_balance_total: "Opening ALPHA Balance",
   alpha_spent_total: "ALPHA Spent",
   alpha_total: "ALPHA Total",
+  forecast_period_is_projected: "Projected Period",
+  modeled_sink_utilization_rate: "Modeled Sink Utilization",
   payout_inflow_ratio: "Payout / Inflow",
   reward_share_pct: "Issued Share",
   reserve_runway_months: "Reserve Runway",
@@ -70,7 +82,7 @@ const evidenceLevelLabels: Record<string, string> = {
 
 const historicalTruthCoverageLabels: Record<string, string> = {
   strong: "Strong",
-  partial: "Partial",
+  partial: "Some Gaps",
   weak: "Weak",
   available: "Available",
   missing: "Missing"
@@ -83,9 +95,9 @@ const setupStatusLabels: Record<string, string> = {
 };
 
 const decisionLogStatusLabels: Record<string, string> = {
-  fixed_truth: "Fixed Truth",
+  fixed_truth: "Imported Data",
   recommended: "Recommended",
-  pending_founder: "Pending Founder",
+  pending_founder: "Decision Needed",
   blocked: "Blocked"
 };
 
@@ -98,34 +110,40 @@ const decisionGovernanceStatusLabels: Record<string, string> = {
 };
 
 const truthClassificationLabels: Record<string, string> = {
-  historical_truth: "Historical Truth",
-  scenario_lever: "Scenario Lever",
-  scenario_assumption: "Scenario Assumption",
-  locked_boundary: "Locked Boundary",
-  derived_assessment: "Derived Assessment"
+  historical_truth: "Imported Data",
+  scenario_lever: "Editable",
+  scenario_assumption: "Assumption",
+  locked_boundary: "Locked",
+  derived_assessment: "Calculated"
 };
 
 const snapshotSourceTypeLabels: Record<string, string> = {
-  compatibility_csv: "Compatibility CSV",
-  canonical_json: "Canonical JSON",
-  canonical_bundle: "Canonical Bundle",
-  hybrid_verified: "Hybrid Verified"
+  compatibility_csv: "Monthly CSV",
+  canonical_csv: "Full Detail CSV",
+  canonical_json: "Full Detail JSON",
+  canonical_bundle: "Full Detail Bundle",
+  hybrid_verified: "Hybrid Data"
 };
 
 const snapshotValidationBasisLabels: Record<string, string> = {
-  monthly_facts: "Monthly Facts",
-  canonical_events: "Canonical Events",
-  hybrid_validation: "Hybrid Validation"
+  monthly_facts: "Monthly Data",
+  canonical_events: "Event Data",
+  hybrid_validation: "Hybrid Check"
 };
 
 const snapshotFounderReadinessLabels: Record<string, string> = {
-  founder_safe: "Founder-Safe",
-  needs_canonical_closure: "Needs Canonical Closure"
+  founder_safe: "Ready to Use",
+  needs_canonical_closure: "Needs More Data"
+};
+
+const scenarioModeLabels: Record<string, string> = {
+  founder_safe: "Imported Data Only",
+  advanced_forecast: "Add Forecast"
 };
 
 const canonicalGapStatusLabels: Record<string, string> = {
-  covered: "Covered",
-  partial: "Partial",
+  covered: "Available",
+  partial: "Some Gaps",
   missing: "Missing",
   strong: "Strong",
   weak: "Weak"
@@ -136,7 +154,7 @@ const dataSetStatusLabels: Record<string, string> = {
   ARCHIVED: "Archived",
   DRAFT: "Draft",
   INVALID: "Needs Fixes",
-  VALID: "Ready for Approval",
+  VALID: "Ready to Approve",
   VALIDATING: "Checking"
 };
 
@@ -272,6 +290,18 @@ export function getSnapshotValidationBasisLabel(validatedVia: string) {
 
 export function getSnapshotFounderReadinessLabel(readiness: string) {
   return snapshotFounderReadinessLabels[readiness] ?? toTitleCase(readiness);
+}
+
+export function getScenarioModeLabel(mode: string | null | undefined) {
+  return scenarioModeLabels[mode ?? "founder_safe"] ?? toTitleCase(mode ?? "founder_safe");
+}
+
+export function getScenarioModeCaveat(mode: string | null | undefined) {
+  if (mode !== "advanced_forecast") {
+    return null;
+  }
+
+  return "Add Forecast uses growth assumptions. Treat the result as an estimate, not observed data.";
 }
 
 export function getCanonicalGapStatusLabel(status: string) {

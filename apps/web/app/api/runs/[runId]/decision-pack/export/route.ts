@@ -37,6 +37,7 @@ import {
   readMilestoneEvaluations,
   readRecommendedSetup,
   readStrategicObjectives,
+  readTokenFlowEvidence,
   readTruthAssumptionMatrix
 } from "@/lib/strategic-objectives";
 
@@ -81,6 +82,8 @@ function buildTreasuryRows(run: NonNullable<Awaited<ReturnType<typeof getRunById
     "company_product_fulfillment_out_total",
     "company_net_treasury_delta_total",
     "sink_utilization_rate",
+    "actual_sink_utilization_rate",
+    "modeled_sink_utilization_rate",
     "payout_inflow_ratio",
     "reserve_runway_months",
     "reward_concentration_top10_pct"
@@ -131,6 +134,7 @@ function buildExportReport(run: NonNullable<Awaited<ReturnType<typeof getRunById
   const historicalTruthCoverage = readHistoricalTruthCoverage(packValue);
   const canonicalGapAudit = readCanonicalGapAudit(packValue);
   const recommendedSetup = readRecommendedSetup(packValue);
+  const tokenFlowEvidence = readTokenFlowEvidence(packValue);
   const decisionLog = mergeDecisionLogWithResolutions(
     readDecisionLog(packValue),
     readDecisionLogResolutions(
@@ -191,6 +195,19 @@ function buildExportReport(run: NonNullable<Awaited<ReturnType<typeof getRunById
               status: getHistoricalTruthCoverageLabel(row.status),
               detail: row.detail
             }))
+          }
+        : null,
+      tokenFlowEvidence: tokenFlowEvidence
+        ? {
+            readiness: tokenFlowEvidence.readiness,
+            summary: tokenFlowEvidence.summary,
+            rows: tokenFlowEvidence.rows.map((row) => ({
+              label: row.label,
+              status: row.status,
+              value: row.value,
+              detail: row.detail
+            })),
+            caveats: tokenFlowEvidence.caveats
           }
         : null,
       recommendedSetup: recommendedSetup

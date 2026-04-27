@@ -23,6 +23,8 @@ import {
   getHistoricalTruthCoverageLabel,
   getPolicyStatusLabel,
   getRunReference,
+  getScenarioModeCaveat,
+  getScenarioModeLabel,
   getSetupStatusLabel,
   getTruthClassificationLabel
 } from "@/lib/common-language";
@@ -37,6 +39,7 @@ import {
   readHistoricalTruthCoverage,
   readRecommendedSetup,
   readStrategicObjectives,
+  readTokenFlowEvidence,
   readTruthAssumptionMatrix
 } from "@/lib/strategic-objectives";
 
@@ -64,6 +67,12 @@ function getTruthClassificationBadge(classification: string) {
   if (classification === "scenario_assumption") return "badge--risky";
   if (classification === "locked_boundary") return "badge--neutral";
   return "badge--info";
+}
+
+function getTokenFlowEvidenceBadge(status: string) {
+  if (status === "locked" || status === "ready") return "badge--candidate";
+  if (status === "assumption") return "badge--risky";
+  return "badge--rejected";
 }
 
 const cashflowBasisMetricKeys = [
@@ -120,6 +129,7 @@ export default async function DecisionPackPage({
   const milestoneEvaluations = readMilestoneEvaluations(decisionPackRecord?.recommendationJson);
   const historicalTruthCoverage = readHistoricalTruthCoverage(decisionPackRecord?.recommendationJson);
   const canonicalGapAudit = readCanonicalGapAudit(decisionPackRecord?.recommendationJson);
+  const tokenFlowEvidence = readTokenFlowEvidence(decisionPackRecord?.recommendationJson);
   const recommendedSetup = readRecommendedSetup(decisionPackRecord?.recommendationJson);
   const decisionLog = mergeDecisionLogWithResolutions(
     readDecisionLog(decisionPackRecord?.recommendationJson),
@@ -151,6 +161,7 @@ export default async function DecisionPackPage({
   const isAdoptedBaseline = run.scenario.adoptedBaselineRunId === run.id;
   const refreshActive = run.status === "QUEUED" || run.status === "RUNNING" || !decisionPack;
   const inlineResumeEnabled = Boolean(process.env.VERCEL) && user.capabilities.includes("runs.write");
+  const scenarioModeCaveat = getScenarioModeCaveat(scenarioParameters.scenario_mode);
 
   return (
     <>
@@ -161,6 +172,7 @@ export default async function DecisionPackPage({
       <nav className="tab-nav">
         <Link href={`/runs/${run.id}`} className="tab-item">Summary</Link>
         <Link href={`/distribution/${run.id}`} className="tab-item">Distribution</Link>
+        <Link href={`/token-flow/${run.id}`} className="tab-item">Token Flow</Link>
         <Link href={`/treasury/${run.id}`} className="tab-item">Treasury</Link>
         <Link href={`/decision-pack/${run.id}`} className="tab-item active">Decision Pack</Link>
       </nav>
@@ -186,6 +198,11 @@ export default async function DecisionPackPage({
                     {getPolicyStatusLabel(decisionPack.policy_status)}
                   </span>
                   <p>{decisionPack.recommendation}</p>
+                  {scenarioModeCaveat ? (
+                    <p className="muted" style={{ marginTop: "0.5rem" }}>
+                      {scenarioModeCaveat}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="decision-summary__meta">
                   <div>
@@ -201,12 +218,53 @@ export default async function DecisionPackPage({
                     <strong>{run.modelVersion.versionName}</strong>
                   </div>
                   <div>
+                    <span>Mode</span>
+                    <strong>{getScenarioModeLabel(scenarioParameters.scenario_mode)}</strong>
+                  </div>
+                  <div>
                     <span>Horizon</span>
                     <strong>{formatPlanningHorizonLabel(scenarioParameters.projection_horizon_months)}</strong>
                   </div>
                 </div>
               </div>
             </Card>
+
+            {tokenFlowEvidence ? (
+              <Card className="span-12" title="Token Flow Evidence">
+                <p className="card-intro">{tokenFlowEvidence.summary}</p>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Layer</th>
+                        <th>Status</th>
+                        <th>Value</th>
+                        <th>Detail</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tokenFlowEvidence.rows.map((row) => (
+                        <tr key={row.key}>
+                          <td>{row.label}</td>
+                          <td>
+                            <span className={`badge ${getTokenFlowEvidenceBadge(row.status)}`}>{row.status}</span>
+                          </td>
+                          <td>{row.value}</td>
+                          <td>{row.detail}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {tokenFlowEvidence.caveats.length > 0 ? (
+                  <ul className="compact-list">
+                    {tokenFlowEvidence.caveats.map((caveat) => (
+                      <li key={caveat}>{caveat}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </Card>
+            ) : null}
 
             {/* Cashflow basis */}
             <Card className="span-12" title="Cashflow Basis">
@@ -223,9 +281,9 @@ export default async function DecisionPackPage({
               </div>
             </Card>
 
-            <Card className="span-12" title="Historical Truth Coverage">
+            <Card className="span-12" title="Imported Data Coverage">
               <p className="card-intro">
-                Canonical and derived coverage behind this run. This keeps scenario recommendations tied to actual stored business evidence.
+                Summary of how complete the imported data is behind this run.
               </p>
               {historicalTruthCoverage ? (
                 <>
@@ -257,13 +315,13 @@ export default async function DecisionPackPage({
                   </div>
                 </>
               ) : (
-                <p className="muted">No historical truth coverage summary recorded yet.</p>
+                <p className="muted">No imported data coverage summary yet.</p>
               )}
             </Card>
 
             <Card className="span-12" title="Recommended Pilot Envelope">
               <p className="card-intro">
-                Structured recommended setup for this run. Historical truth stays fixed; only scenario levers and assumptions are proposed here.
+                Recommended setup from this run. Imported data stays fixed; only policy choices and assumptions change.
               </p>
               {recommendedSetup ? (
                 <>
@@ -387,7 +445,7 @@ export default async function DecisionPackPage({
 
             <Card className="span-12" title="Decision Log">
               <p className="card-intro">
-                Clear split between what is fixed by truth, what is recommended by current evidence, and what still needs founder or external follow-up.
+                Separates fixed data, current recommendations, and decisions that still need follow-up.
               </p>
               {decisionLog.length === 0 ? (
                 <p className="muted">No structured decision log recorded yet.</p>
@@ -445,16 +503,16 @@ export default async function DecisionPackPage({
               )}
             </Card>
 
-            <Card className="span-12" title="Truth vs Assumption Matrix">
+            <Card className="span-12" title="Data vs Assumptions">
               <p className="card-intro">
-                This matrix keeps historical truth, scenario levers, conditional assumptions, locked boundaries, and derived assessments visibly separate.
+                Separates imported data, editable values, assumptions, locked limits, and calculated results.
               </p>
               {truthAssumptionMatrix.length === 0 ? (
-                <p className="muted">No truth vs assumption matrix recorded yet.</p>
+                <p className="muted">No data vs assumptions matrix yet.</p>
               ) : (
                 <div className="table-wrap">
                   <table className="table">
-                    <thead><tr><th>Item</th><th>Classification</th><th>Value</th><th>Note</th></tr></thead>
+                    <thead><tr><th>Item</th><th>Status</th><th>Value</th><th>Note</th></tr></thead>
                     <tbody>
                       {truthAssumptionMatrix.map((item) => (
                         <tr key={item.key}>

@@ -21,6 +21,8 @@ import {
   getPolicyStatusLabel,
   getRiskSeverityLabel,
   getRunReference,
+  getScenarioModeCaveat,
+  getScenarioModeLabel,
   getRunStatusLabel
 } from "@/lib/common-language";
 import {
@@ -55,6 +57,8 @@ const businessOutcomeMetricKeys = [
 const alphaOutcomeMetricKeys = [
   "alpha_issued_total",
   "alpha_spent_total",
+  "alpha_actual_spent_total",
+  "alpha_modeled_spent_total",
   "alpha_held_total",
   "alpha_cashout_equivalent_total"
 ] as const satisfies readonly SummaryMetricKey[];
@@ -102,6 +106,7 @@ export default async function RunDetailPage({
     reward_global_factor: baselineModel.defaults.reward_global_factor,
     reward_pool_factor: baselineModel.defaults.reward_pool_factor
   });
+  const scenarioModeCaveat = getScenarioModeCaveat(scenarioParameters.scenario_mode);
   const failureMessage = run.status === "FAILED" ? run.runNotes?.trim() || "Run failed without a recorded error." : null;
   const activeRefresh = run.status === "QUEUED" || run.status === "RUNNING" || (run.status === "COMPLETED" && !decisionPack);
   const inlineResumeEnabled = Boolean(process.env.VERCEL) && user.capabilities.includes("runs.write");
@@ -134,6 +139,7 @@ export default async function RunDetailPage({
       <nav className="tab-nav">
         <Link href={`/runs/${run.id}`} className="tab-item active">Summary</Link>
         <Link href={`/distribution/${run.id}`} className="tab-item">Distribution</Link>
+        <Link href={`/token-flow/${run.id}`} className="tab-item">Token Flow</Link>
         <Link href={`/treasury/${run.id}`} className="tab-item">Treasury</Link>
         <Link href={`/decision-pack/${run.id}`} className="tab-item">Decision Pack</Link>
       </nav>
@@ -149,6 +155,11 @@ export default async function RunDetailPage({
               <p>
                 {failureMessage ?? decisionPack?.recommendation ?? "Simulation result is available. Decision pack recommendation is pending."}
               </p>
+              {scenarioModeCaveat ? (
+                <p className="muted" style={{ marginTop: "0.5rem" }}>
+                  {scenarioModeCaveat}
+                </p>
+              ) : null}
             </div>
             <div className="decision-summary__meta">
               <div>
@@ -166,6 +177,10 @@ export default async function RunDetailPage({
               <div>
                 <span>Run Status</span>
                 <strong>{getRunStatusLabel(run.status)}</strong>
+              </div>
+              <div>
+                <span>Mode</span>
+                <strong>{getScenarioModeLabel(scenarioParameters.scenario_mode)}</strong>
               </div>
               <div>
                 <span>Horizon</span>

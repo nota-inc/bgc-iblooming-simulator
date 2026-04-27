@@ -87,6 +87,18 @@ export type SimulationResultExportCanonicalGapAudit = {
   }>;
 };
 
+export type SimulationResultExportTokenFlowEvidence = {
+  readiness: string;
+  summary: string;
+  rows: Array<{
+    label: string;
+    status: string;
+    value: string;
+    detail: string;
+  }>;
+  caveats: string[];
+};
+
 export type SimulationResultExportDecisionPack = {
   title: string;
   verdict: string;
@@ -96,6 +108,7 @@ export type SimulationResultExportDecisionPack = {
   unresolvedQuestions: string[];
   historicalTruthCoverage: SimulationResultExportHistoricalTruthCoverage | null;
   canonicalGapAudit: SimulationResultExportCanonicalGapAudit | null;
+  tokenFlowEvidence: SimulationResultExportTokenFlowEvidence | null;
   recommendedSetup: {
     title: string;
     summary: string;
@@ -223,15 +236,15 @@ ${renderList(report.decisionPack.preferredSettings, "None.")}
 
 ${renderList(report.decisionPack.rejectedSettings, "None.")}
 
-### Historical Truth Coverage
+### Imported Data Coverage
 
 ${
   !report.decisionPack.historicalTruthCoverage
-    ? "No historical truth coverage summary."
+    ? "No imported data coverage summary yet."
     : `- Coverage: ${report.decisionPack.historicalTruthCoverage.status}
 - Summary: ${report.decisionPack.historicalTruthCoverage.summary}
 
-| Coverage Layer | Status | Detail |
+| Data Layer | Status | Detail |
 | --- | --- | --- |
 ${report.decisionPack.historicalTruthCoverage.rows.map((row) => `| ${row.label} | ${row.status} | ${row.detail} |`).join("\n")}`
 }
@@ -247,6 +260,21 @@ ${
 | Rule Family | Status | Detail |
 | --- | --- | --- |
 ${report.decisionPack.canonicalGapAudit.rows.map((row) => `| ${row.label} | ${row.status} | ${row.detail} |`).join("\n")}`
+}
+
+### Token Flow Evidence
+
+${
+  !report.decisionPack.tokenFlowEvidence
+    ? "No token flow evidence summary."
+    : `- Readiness: ${report.decisionPack.tokenFlowEvidence.readiness}
+- Summary: ${report.decisionPack.tokenFlowEvidence.summary}
+
+| Evidence Layer | Status | Value | Detail |
+| --- | --- | --- | --- |
+${report.decisionPack.tokenFlowEvidence.rows.map((row) => `| ${row.label} | ${row.status} | ${row.value} | ${row.detail} |`).join("\n")}
+
+${renderList(report.decisionPack.tokenFlowEvidence.caveats, "No token flow caveats.")}`
 }
 
 ### Recommended Pilot Envelope
@@ -279,13 +307,13 @@ ${
       ].join("\n")
 }
 
-### Truth vs Assumption Matrix
+### Data vs Assumptions
 
 ${
   report.decisionPack.truthAssumptionMatrix.length === 0
-    ? "No truth vs assumption matrix."
+    ? "No data vs assumptions matrix yet."
     : [
-        "| Item | Classification | Value | Note |",
+        "| Item | Status | Value | Note |",
         "| --- | --- | --- | --- |",
         ...report.decisionPack.truthAssumptionMatrix.map(
           (item) => `| ${item.label} | ${item.classification} | ${item.value} | ${item.note} |`
@@ -489,7 +517,7 @@ export function renderSimulationResultCsv(report: SimulationResultExport) {
         "decision_pack",
         "historical_truth_coverage",
         "overall",
-        "Historical Truth Coverage",
+        "Imported Data Coverage",
         report.decisionPack.historicalTruthCoverage.status,
         "",
         "",
@@ -552,6 +580,63 @@ export function renderSimulationResultCsv(report: SimulationResultExport) {
           "",
           "",
           row.detail,
+          "",
+          ""
+        ])
+      );
+    }
+  }
+
+  if (report.decisionPack.tokenFlowEvidence) {
+    rows.push(
+      renderCsvRow([
+        "decision_pack",
+        "token_flow_evidence",
+        "overall",
+        "Token Flow Evidence",
+        report.decisionPack.tokenFlowEvidence.readiness,
+        "",
+        "",
+        "",
+        "",
+        report.decisionPack.tokenFlowEvidence.summary,
+        "",
+        ""
+      ])
+    );
+
+    for (const row of report.decisionPack.tokenFlowEvidence.rows) {
+      rows.push(
+        renderCsvRow([
+          "decision_pack",
+          "token_flow_evidence_row",
+          row.label,
+          row.label,
+          row.status,
+          "",
+          "",
+          "",
+          "",
+          row.value,
+          row.detail,
+          ""
+        ])
+      );
+    }
+
+    for (const caveat of report.decisionPack.tokenFlowEvidence.caveats) {
+      rows.push(
+        renderCsvRow([
+          "decision_pack",
+          "token_flow_caveat",
+          caveat,
+          "Token Flow Caveat",
+          "",
+          "",
+          "",
+          "",
+          "",
+          caveat,
           "",
           ""
         ])
