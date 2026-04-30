@@ -23,6 +23,9 @@ const MONTHLY_CSV_HEADERS = [
   "pool_reward_usd",
   "cashout_usd",
   "sink_spend_usd",
+  "cash_in_usd",
+  "internal_credit_spent_usd",
+  "payment_method",
   "active_member",
   "recognized_revenue_usd",
   "gross_margin_usd",
@@ -70,6 +73,9 @@ const FULL_DETAIL_CSV_HEADERS = [
   "unit",
   "recognized_revenue_usd",
   "gross_margin_usd",
+  "cash_in_usd",
+  "internal_credit_spent_usd",
+  "payment_method",
   "entry_type",
   "amount_pc",
   "amount_sp",
@@ -210,6 +216,13 @@ function buildMonthlyCsvRows(
       pool_reward_usd: fact.poolRewardUsd,
       cashout_usd: fact.cashoutUsd,
       sink_spend_usd: fact.sinkSpendUsd,
+      cash_in_usd: readMetadataNumber(metadata, "cash_in_usd", "cashInUsd"),
+      internal_credit_spent_usd: readMetadataNumber(
+        metadata,
+        "internal_credit_spent_usd",
+        "internalCreditSpentUsd"
+      ),
+      payment_method: readMetadataString(metadata, "payment_method", "paymentMethod"),
       active_member: fact.activeMember,
       recognized_revenue_usd: readMetadataNumber(metadata, "recognized_revenue_usd", "recognizedRevenueUsd"),
       gross_margin_usd: readMetadataNumber(metadata, "gross_margin_usd", "grossMarginUsd"),
@@ -336,6 +349,13 @@ function buildFullDetailCsvRows(payload: CanonicalSnapshotPayload): Array<CsvRow
         unit: event.unit,
         recognized_revenue_usd: readMetadataNumber(event.metadata, "recognized_revenue_usd", "recognizedRevenueUsd"),
         gross_margin_usd: readMetadataNumber(event.metadata, "gross_margin_usd", "grossMarginUsd"),
+        cash_in_usd: readMetadataNumber(event.metadata, "cash_in_usd", "cashInUsd"),
+        internal_credit_spent_usd: readMetadataNumber(
+          event.metadata,
+          "internal_credit_spent_usd",
+          "internalCreditSpentUsd"
+        ),
+        payment_method: readMetadataString(event.metadata, "payment_method", "paymentMethod"),
         metadata: metadataCell(event.metadata),
       })
     );
@@ -350,6 +370,12 @@ function buildFullDetailCsvRows(payload: CanonicalSnapshotPayload): Array<CsvRow
         effective_period: entry.effective_period,
         amount_pc: entry.amount_pc,
         sink_spend_usd: readMetadataNumber(entry.metadata, "sink_spend_usd", "sinkSpendUsd"),
+        internal_credit_spent_usd: readMetadataNumber(
+          entry.metadata,
+          "internal_credit_spent_usd",
+          "internalCreditSpentUsd"
+        ),
+        payment_method: readMetadataString(entry.metadata, "payment_method", "paymentMethod"),
         metadata: metadataCell(entry.metadata),
       })
     );

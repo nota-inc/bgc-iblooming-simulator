@@ -17,6 +17,13 @@ export const snapshotImportCsvHeaders = [
   "active_member"
 ] as const;
 
+export const snapshotImportPaymentMethods = [
+  "FIAT",
+  "PC",
+  "ALPHA",
+  "MIXED"
+] as const;
+
 export const snapshotImportCsvRowSchema = z.object({
   period_key: z.string().min(1),
   member_key: z.string().min(1),
@@ -30,6 +37,9 @@ export const snapshotImportCsvRowSchema = z.object({
   cashout_usd: z.string().min(1),
   sink_spend_usd: z.string().min(1),
   active_member: z.string().min(1),
+  cash_in_usd: z.string().optional().default(""),
+  internal_credit_spent_usd: z.string().optional().default(""),
+  payment_method: z.string().optional().default(""),
   recognized_revenue_usd: z.string().optional().default(""),
   gross_margin_usd: z.string().optional().default(""),
   member_join_period: z.string().optional().default(""),

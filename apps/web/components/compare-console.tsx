@@ -962,6 +962,10 @@ export function CompareConsole({
                         <strong>{formatCommonMetricValue("company_partner_payout_out_total", row.partnerPayoutOut)}</strong>
                       </span>
                       <span>
+                        <small>Internal Credit Used</small>
+                        <strong>{formatCommonMetricValue("company_internal_credit_spent_total", row.internalCreditSpent)}</strong>
+                      </span>
+                      <span>
                         <small>Direct Rewards Owed</small>
                         <strong>{formatCommonMetricValue("company_direct_reward_obligation_total", row.directObligations)}</strong>
                       </span>

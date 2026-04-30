@@ -40,6 +40,7 @@ export type DatasetSimulationFact = {
   grossCashInUsd?: number | null;
   retainedRevenueUsd?: number | null;
   partnerPayoutOutUsd?: number | null;
+  internalCreditSpentUsd?: number | null;
   productFulfillmentOutUsd?: number | null;
   poolFundingEntries?:
     | Array<{
@@ -211,6 +212,7 @@ type FinancialPeriodLedger = {
   grossCashIn: number;
   retainedRevenue: number;
   partnerPayoutOut: number;
+  internalCreditSpent: number;
   directRewardObligation: number;
   poolFundingObligation: number;
   actualPayoutOut: number;
@@ -679,6 +681,9 @@ function buildCohortProjectedFacts(
         grossCashInUsd: roundMetric(Math.max(templateFact.grossCashInUsd ?? 0, 0) * valueScale),
         retainedRevenueUsd: roundMetric(Math.max(templateFact.retainedRevenueUsd ?? 0, 0) * valueScale),
         partnerPayoutOutUsd: roundMetric(Math.max(templateFact.partnerPayoutOutUsd ?? 0, 0) * valueScale),
+        internalCreditSpentUsd: roundMetric(
+          Math.max(templateFact.internalCreditSpentUsd ?? 0, 0) * valueScale
+        ),
         productFulfillmentOutUsd: roundMetric(
           Math.max(templateFact.productFulfillmentOutUsd ?? 0, 0) * valueScale
         ),
@@ -1082,6 +1087,7 @@ function buildFinancialPeriodLedgers(
         grossCashIn: 0,
         retainedRevenue: 0,
         partnerPayoutOut: 0,
+        internalCreditSpent: 0,
         directRewardObligation: 0,
         poolFundingObligation: 0,
         actualPayoutOut: 0,
@@ -1095,6 +1101,7 @@ function buildFinancialPeriodLedgers(
       0
     );
     periodLedger.partnerPayoutOut += Math.max(row.partnerPayoutOutUsd ?? 0, 0);
+    periodLedger.internalCreditSpent += Math.max(row.internalCreditSpentUsd ?? 0, 0);
     periodLedger.directRewardObligation += Math.max(row.globalRewardUsd, 0);
     periodLedger.actualPayoutOut += Math.max(row.cashout, 0);
     periodLedger.productFulfillmentOut += Math.max(row.productFulfillmentOutUsd ?? 0, 0);
@@ -1114,6 +1121,7 @@ function buildFinancialPeriodLedgers(
         grossCashIn: 0,
         retainedRevenue: 0,
         partnerPayoutOut: 0,
+        internalCreditSpent: 0,
         directRewardObligation: 0,
         poolFundingObligation: 0,
         actualPayoutOut: 0,
@@ -1224,6 +1232,10 @@ function buildSummaryMetrics(
     (total, ledger) => total + ledger.partnerPayoutOut,
     0
   );
+  const internalCreditSpentTotal = financialLedgers.reduce(
+    (total, ledger) => total + ledger.internalCreditSpent,
+    0
+  );
   const directRewardObligationTotal = financialLedgers.reduce(
     (total, ledger) => total + ledger.directRewardObligation,
     0
@@ -1285,6 +1297,7 @@ function buildSummaryMetrics(
   summary.company_gross_cash_in_total = roundMetric(grossCashInTotal);
   summary.company_retained_revenue_total = roundMetric(retainedRevenueTotal);
   summary.company_partner_payout_out_total = roundMetric(partnerPayoutOutTotal);
+  summary.company_internal_credit_spent_total = roundMetric(internalCreditSpentTotal);
   summary.company_direct_reward_obligation_total = roundMetric(directRewardObligationTotal);
   summary.company_pool_funding_obligation_total = roundMetric(poolFundingObligationTotal);
   summary.company_actual_payout_out_total = roundMetric(actualPayoutOutTotal);
@@ -1424,6 +1437,11 @@ function buildTimeSeriesMetrics(
         },
         {
           period_key: periodKey,
+          metric_key: "company_internal_credit_spent_total",
+          metric_value: roundMetric(financialLedger?.internalCreditSpent ?? 0)
+        },
+        {
+          period_key: periodKey,
           metric_key: "company_direct_reward_obligation_total",
           metric_value: roundMetric(financialLedger?.directRewardObligation ?? 0)
         },
@@ -1470,6 +1488,7 @@ function buildSegmentMetrics(
       grossCashIn: number;
       retainedRevenue: number;
       partnerPayoutOut: number;
+      internalCreditSpent: number;
       directRewardObligation: number;
       poolFundingObligation: number;
       actualPayoutOut: number;
@@ -1503,6 +1522,7 @@ function buildSegmentMetrics(
         grossCashIn: 0,
         retainedRevenue: 0,
         partnerPayoutOut: 0,
+        internalCreditSpent: 0,
         directRewardObligation: 0,
         poolFundingObligation: 0,
         actualPayoutOut: 0,
@@ -1515,6 +1535,7 @@ function buildSegmentMetrics(
       0
     );
     sourceFinancial.partnerPayoutOut += Math.max(row.partnerPayoutOutUsd ?? 0, 0);
+    sourceFinancial.internalCreditSpent += Math.max(row.internalCreditSpentUsd ?? 0, 0);
     sourceFinancial.directRewardObligation += Math.max(row.globalRewardUsd, 0);
     sourceFinancial.actualPayoutOut += Math.max(row.cashout, 0);
     sourceFinancial.productFulfillmentOut += Math.max(row.productFulfillmentOutUsd ?? 0, 0);
@@ -1549,6 +1570,7 @@ function buildSegmentMetrics(
         grossCashIn: 0,
         retainedRevenue: 0,
         partnerPayoutOut: 0,
+        internalCreditSpent: 0,
         directRewardObligation: 0,
         poolFundingObligation: 0,
         actualPayoutOut: 0,
@@ -1599,6 +1621,12 @@ function buildSegmentMetrics(
         segment_key: sourceSystem,
         metric_key: "company_partner_payout_out_total",
         metric_value: roundMetric(financial?.partnerPayoutOut ?? 0)
+      },
+      {
+        segment_type: "source_system",
+        segment_key: sourceSystem,
+        metric_key: "company_internal_credit_spent_total",
+        metric_value: roundMetric(financial?.internalCreditSpent ?? 0)
       },
       {
         segment_type: "source_system",

@@ -269,6 +269,20 @@ function parseOptionalBooleanField(value: string, fieldName: string, rowRef: str
   return parseBooleanField(value, fieldName, rowRef);
 }
 
+function parseOptionalPaymentMethodField(value: string, fieldName: string, rowRef: string) {
+  const normalized = value.trim().toUpperCase();
+
+  if (normalized.length === 0) {
+    return null;
+  }
+
+  if (["FIAT", "PC", "ALPHA", "MIXED"].includes(normalized)) {
+    return normalized;
+  }
+
+  throw new Error(`${fieldName} must be one of FIAT/PC/ALPHA/MIXED (${rowRef}).`);
+}
+
 function parseOptionalPeriodField(value: string, fieldName: string, rowRef: string) {
   const trimmed = value.trim();
 
@@ -877,6 +891,9 @@ function normalizeCompatibilityMetadataForValidation(
   copyMetadataAlias(normalized, "cross_app_active", ["crossAppActive"]);
   copyMetadataAlias(normalized, "recognized_revenue_usd", ["recognizedRevenueUsd"]);
   copyMetadataAlias(normalized, "gross_margin_usd", ["grossMarginUsd"]);
+  copyMetadataAlias(normalized, "cash_in_usd", ["cashInUsd"]);
+  copyMetadataAlias(normalized, "internal_credit_spent_usd", ["internalCreditSpentUsd"]);
+  copyMetadataAlias(normalized, "payment_method", ["paymentMethod"]);
 
   if (canonicalSnapshotId && !("canonical_snapshot_id" in normalized)) {
     normalized.canonical_snapshot_id = canonicalSnapshotId;
@@ -1357,6 +1374,12 @@ function validateUnderstandingDocRowFormula(row: ParsedCompatibilityRow) {
   const globalRewardBreakdown = row.metadata
     ? getOptionalMetadataRecord(row.metadata, "global_reward_breakdown_usd", row.rowRef)
     : null;
+  const paymentMethod = row.metadata && "payment_method" in row.metadata
+    ? parseMetadataString(row.metadata.payment_method, "payment_method", row.rowRef).toUpperCase()
+    : null;
+  const internalCreditSpentUsd = row.metadata
+    ? getOptionalMetadataNumber(row.metadata, "internal_credit_spent_usd", row.rowRef)
+    : null;
 
   if (sourceSystem === "BGC") {
     if (memberTier !== null && !isKnownBgcTier(memberTier)) {
@@ -1518,7 +1541,24 @@ function validateUnderstandingDocRowFormula(row: ParsedCompatibilityRow) {
         row.rowRef
       );
       assertCloseEnough(30, platformTakeRatePct, "platform_take_rate_pct", row.rowRef);
-      assertCloseEnough(grossSaleUsd, row.fact.sinkSpendUsd, "sink_spend_usd", row.rowRef);
+
+      if (paymentMethod === "FIAT") {
+        assertCloseEnough(internalCreditSpentUsd ?? 0, row.fact.sinkSpendUsd, "sink_spend_usd", row.rowRef);
+      } else if (paymentMethod === "PC" || paymentMethod === "ALPHA") {
+        assertCloseEnough(
+          internalCreditSpentUsd ?? grossSaleUsd,
+          row.fact.sinkSpendUsd,
+          "sink_spend_usd",
+          row.rowRef
+        );
+      } else {
+        assertCloseEnough(
+          internalCreditSpentUsd ?? grossSaleUsd,
+          row.fact.sinkSpendUsd,
+          "sink_spend_usd",
+          row.rowRef
+        );
+      }
 
       if (!isAggregateRow && globalRewardBreakdown && "IB_LR" in globalRewardBreakdown) {
         assertCloseEnough(
@@ -1868,6 +1908,22 @@ function validateCompatibilityRowMetadata(
 
   if ("business_event_family" in metadata) {
     parseMetadataStringArray(metadata.business_event_family, "business_event_family", rowRef);
+  }
+
+  if ("payment_method" in metadata) {
+    const paymentMethod = parseMetadataString(metadata.payment_method, "payment_method", rowRef).toUpperCase();
+
+    if (!["FIAT", "PC", "ALPHA", "MIXED"].includes(paymentMethod)) {
+      throw new Error(`payment_method must be one of FIAT/PC/ALPHA/MIXED (${rowRef}).`);
+    }
+  }
+
+  if ("cash_in_usd" in metadata) {
+    getOptionalMetadataNumber(metadata, "cash_in_usd", rowRef);
+  }
+
+  if ("internal_credit_spent_usd" in metadata) {
+    getOptionalMetadataNumber(metadata, "internal_credit_spent_usd", rowRef);
   }
 
   if ("active_roles" in metadata) {
@@ -2718,13 +2774,31 @@ export function parseCompatibilityCsvSnapshotText(
         "cross_app_active",
         rowRef
       );
+      const cashInUsd = parseOptionalNumericField(
+        rawRow.data.cash_in_usd,
+        "cash_in_usd",
+        rowRef
+      );
+      const internalCreditSpentUsd = parseOptionalNumericField(
+        rawRow.data.internal_credit_spent_usd,
+        "internal_credit_spent_usd",
+        rowRef
+      );
+      const paymentMethod = parseOptionalPaymentMethodField(
+        rawRow.data.payment_method,
+        "payment_method",
+        rowRef
+      );
       const extraJson = parseOptionalJsonRecordField(rawRow.data.extra_json, "extra_json", rowRef);
       const metadataJsonEntries = Object.entries({
         recognizedRevenueUsd,
         grossMarginUsd,
         memberJoinPeriod,
         isAffiliate,
-        crossAppActive
+        crossAppActive,
+        cashInUsd,
+        internalCreditSpentUsd,
+        paymentMethod
       }).filter(([, value]) => value !== null);
       const derivedMetadata =
         metadataJsonEntries.length > 0 ? Object.fromEntries(metadataJsonEntries) : null;

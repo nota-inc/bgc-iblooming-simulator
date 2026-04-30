@@ -89,6 +89,7 @@ Catatan penting: radar menormalisasi metric yang berbeda supaya bisa dilihat ber
 | Metric | Arah bagus | Artinya |
 | --- | --- | --- |
 | Cash In | Lebih tinggi | Total cash bisnis yang masuk lebih besar. |
+| Internal Credit Used | Lebih tinggi jika memang disengaja | Lebih banyak PC/ALPHA/internal credit dipakai di ecosystem. Ini harus dibaca terpisah dari Cash In. |
 | Revenue Kept | Lebih tinggi | Revenue yang dipegang perusahaan lebih besar. |
 | Partner Payout | Lebih rendah untuk treasury, tetapi harus sesuai business model | Cash yang diteruskan ke partner/creator. |
 | Direct Rewards Owed | Lebih rendah untuk treasury | Kewajiban direct reward. |

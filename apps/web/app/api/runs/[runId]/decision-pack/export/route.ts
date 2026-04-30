@@ -77,6 +77,7 @@ function buildTreasuryRows(run: NonNullable<Awaited<ReturnType<typeof getRunById
     "company_gross_cash_in_total",
     "company_retained_revenue_total",
     "company_partner_payout_out_total",
+    "company_internal_credit_spent_total",
     "company_direct_reward_obligation_total",
     "company_pool_funding_obligation_total",
     "company_actual_payout_out_total",

@@ -96,7 +96,17 @@ It stores one member-month observation with fields such as:
 - `poolRewardUsd`
 - `cashoutUsd`
 - `sinkSpendUsd`
+- `cashInUsd` in metadata
+- `internalCreditSpentUsd` in metadata
+- `paymentMethod` in metadata
 - `activeMember`
+
+Plain-language cash rule:
+
+- `cashInUsd` is new fiat cash collected by the business.
+- `internalCreditSpentUsd` is PC/ALPHA/internal credit used inside the ecosystem.
+- `paymentMethod` explains whether the row was paid with `FIAT`, `PC`, `ALPHA`, or `MIXED`.
+- `sinkSpendUsd` is internal ecosystem use. It can be funded by PC/ALPHA and should not automatically be treated as new cash.
 
 ### Full Detail CSV
 

@@ -94,7 +94,7 @@ Catatan: Data Check hanya mengecek struktur dan integritas data. Data Check tida
 
 Monthly CSV adalah format input termudah. Satu row berarti: satu member, satu source system, satu bulan.
 
-Kolom pertama sampai `active_member` wajib ada. Kolom setelah itu sangat disarankan karena membantu engine membaca revenue, margin, dan histori member.
+Kolom yang wajib ditandai `Ya`. Kolom cash-basis sangat disarankan karena mencegah engine mencampur cash baru dengan pemakaian internal credit.
 
 | Kolom | Wajib | Artinya |
 | --- | --- | --- |
@@ -112,6 +112,9 @@ Kolom pertama sampai `active_member` wajib ada. Kolom setelah itu sangat disaran
 | `active_member` | Ya | Apakah member aktif di bulan itu. Nilai yang diterima: `true`, `false`, `1`, `0`, `yes`, `no`, `y`, `n`. |
 | `recognized_revenue_usd` | Disarankan | Revenue yang diakui perusahaan dari row tersebut. Dipakai untuk cashflow dan treasury support. |
 | `gross_margin_usd` | Opsional | Gross margin jika diketahui. Kosongkan kalau belum tahu. |
+| `cash_in_usd` | Disarankan | Cash fiat baru yang masuk dari row ini. Untuk entry/upgrade BGC biasanya sama dengan fee yang dibayar. Untuk iBLOOMING yang dibayar memakai PC/ALPHA, isi `0`. |
+| `internal_credit_spent_usd` | Disarankan | Nilai USD dari PC/ALPHA/internal credit yang dipakai di row ini. Ini pemakaian ecosystem, bukan cash baru. |
+| `payment_method` | Disarankan | Cara transaksi dibayar. Nilai yang diterima: `FIAT`, `PC`, `ALPHA`, `MIXED`. |
 | `member_join_period` | Disarankan | Bulan pertama member join. Format `YYYY-MM`. |
 | `is_affiliate` | Disarankan | Apakah member dianggap affiliate. Nilainya sama seperti `active_member`. |
 | `cross_app_active` | Disarankan | Apakah member aktif lintas BGC dan iBLOOMING. Nilainya sama seperti `active_member`. |
@@ -130,9 +133,12 @@ Monthly CSV sudah berupa ringkasan. Artinya pemilik spreadsheet bertanggung jawa
 | `global_reward_usd` | Reward direct/global yang owed atau distributed ke member, misalnya BGC RR/GR atau reward family iBLOOMING. | Engine memperlakukan ini sebagai nilai reward obligation yang di-import. Kalau tidak `0`, sebaiknya `extra_json.global_reward_breakdown_usd` menjelaskan reward family asalnya. |
 | `pool_reward_usd` | Nilai distribusi pool yang dibayar atau dialokasikan ke member. | Engine memperlakukan ini sebagai nilai pool reward yang di-import. Kalau tidak `0`, sebaiknya `extra_json.pool_reward_breakdown_usd` menjelaskan pool asalnya. |
 | `cashout_usd` | Cash-out yang sudah dibayar, atau approved jika detail payment belum dipisah. | Ini adalah cash yang benar-benar keluar dari ecosystem. Ini berbeda dari reward accrual dan berbeda dari internal use ALPHA. Isi `0` kalau tidak ada cash-out. |
-| `sink_spend_usd` | Internal-use spend di dalam ecosystem, contoh membayar produk iBLOOMING/iBoomie dengan ALPHA/PC. | Ini menjadi Actual ALPHA Used. Ini bukan revenue perusahaan langsung dan bukan cash paid out. Untuk sales iBLOOMING, compatibility rule saat ini mengharapkan nilainya sama dengan gross sale jika row membawa gross sale basis. |
+| `sink_spend_usd` | Internal-use spend di dalam ecosystem, contoh membayar produk iBLOOMING/iBoomie dengan ALPHA/PC. | Ini menjadi Actual ALPHA Used. Ini bukan revenue perusahaan langsung dan bukan cash paid out. Untuk iBLOOMING yang dibayar dengan `PC` atau `ALPHA`, nilainya sebaiknya sama dengan `internal_credit_spent_usd`. Untuk `FIAT`, biasanya `0`. |
 | `recognized_revenue_usd` | Revenue yang diakui perusahaan dari event atau row bulanan. | Untuk BGC biasanya berasal dari entry/upgrade fee basis. Untuk iBLOOMING sebaiknya platform revenue, saat ini divalidasi sebagai `30%` dari gross sale jika gross sale basis tersedia. |
 | `gross_margin_usd` | Gross margin setelah direct cost, jika source system atau finance team tahu angkanya. | Engine tidak mengarang gross margin kalau kosong. Engine memakai nilai yang diberikan untuk evidence dan reporting jika tersedia. |
+| `cash_in_usd` | Cash fiat baru yang diterima dari customer atau member pada row ini. | Menggantikan inferensi cash-in engine. Pakai ini untuk menunjukkan bahwa sales iBLOOMING yang dibayar dengan PC/ALPHA bukan cash fiat baru. |
+| `internal_credit_spent_usd` | Nilai internal credit yang dipakai user, seperti PC atau ALPHA untuk membeli produk iBLOOMING/iBoomie. | Mengisi metric `Internal Credit Used` dan membantu menjelaskan `sink_spend_usd`. Nilai ini tidak menambah `Cash In`. |
+| `payment_method` | Jalur pembayaran untuk event bisnis. | `FIAT` berarti cash baru. `PC` dan `ALPHA` berarti internal credit. `MIXED` berarti row berisi fiat dan internal credit. |
 | `active_member`, `member_tier`, `member_join_period`, `is_affiliate`, `cross_app_active` | Data status member dan lifecycle dari CRM, membership, atau role history. | Field ini mempengaruhi activity multiplier, lifecycle reading, dan interpretasi eligibility di scenario run. |
 
 ### Tabel Rule Tier BGC Saat Ini
@@ -244,6 +250,9 @@ Pakai row `member_alias` tambahan hanya kalau satu member punya lebih dari satu 
 | `unit` | `business_event`, `reward_obligation`, `pool_entry` | Satuan amount, contoh `USD`, `PC`, atau `SP`. |
 | `recognized_revenue_usd` | `business_event` | Revenue yang diakui perusahaan dari event ini. Dipakai di cashflow dan treasury metrics. |
 | `gross_margin_usd` | `business_event` | Gross margin dari event jika diketahui. |
+| `cash_in_usd` | `business_event` | Cash fiat baru yang dikumpulkan event ini. Isi `0` jika produk dibayar sepenuhnya dengan PC/ALPHA. |
+| `internal_credit_spent_usd` | `business_event`, `pc_entry` | Nilai USD dari PC/ALPHA/internal credit yang dipakai. Ini pemakaian ecosystem, bukan cash fiat baru. |
+| `payment_method` | `business_event`, `pc_entry` | Metode pembayaran: `FIAT`, `PC`, `ALPHA`, atau `MIXED`. |
 | `entry_type` | `pc_entry`, `sp_entry`, `pool_entry` | Jenis gerakan ledger. Pilihan nilainya tergantung row type. |
 | `amount_pc` | `pc_entry` | Jumlah PC untuk satu gerakan ledger PC. |
 | `amount_sp` | `sp_entry` | Jumlah SP / Sales Point untuk satu gerakan ledger basis reward. |
@@ -296,6 +305,21 @@ Full Detail CSV berisi source-detail rows. Saat import, engine menurunkan data d
 | `cashout_event` dengan `APPROVED` dan tidak ada row `PAID` yang cocok | Cash-out approved saat detail payment belum dipisah. | Menambah `cashout_usd` supaya simulator tetap mencerminkan expected payout. |
 | `qualification_window` dan `qualification_status` | Window dan histori qualification, seperti WEC atau CPR. | Memperkuat Source Detail checks dan evidence eligibility. Tidak membuat revenue sendiri. |
 
+## Full Detail Event Calculators
+
+Jika Full Detail CSV/JSON memiliki source event, engine bisa menurunkan beberapa nilai bulanan tanpa harus semua angka diringkas manual lebih dulu.
+
+| Source detail | Output yang diturunkan engine |
+| --- | --- |
+| Event join/upgrade affiliate BGC plus row ledger PC/SP | Revenue BGC bulanan, PC, SP/LTS, RR, funding GPSP, dan funding WEC Pool. |
+| Metadata event BGC `bgc_miracle_cash_usd` atau `miracle_cash_usd` | Reward `BGC_MIRACLE_CASH`. |
+| iBLOOMING `CP_PRODUCT_SOLD` dengan recognized revenue basis | `IB_LR` dan `IB_MIRACLE_CASH`. |
+| Event iBLOOMING dengan `cpr_year` | `IB_CPR` memakai rate tahun 1 atau tahun 2. |
+| iBLOOMING `GIM_SIGNUP_COMPLETED` dengan `tier` dan `quantity` | `IB_GRR`. |
+| iBLOOMING `IMATRIX_PURCHASE_COMPLETED` dengan `tier`, `imatrix_plan`, dan `quantity` | `IB_IRR`. |
+| Row `pool_entry` atau event `metadata.pool_funding_basis` | Pool facts untuk GPSP, WEC Pool, GPS, GMP, GEC, atau pool code lain yang ada di file. |
+| `role_history`, `qualification_window`, `qualification_status` | Evidence status/eligibility CP, Executive CP, WEC, CPR, dan lainnya dari waktu ke waktu. Eligibility tidak dianggap status aktif kecuali status row menyatakan aktif/tercapai. |
+
 ## Columns With Fixed Choices
 
 Gunakan uppercase untuk Full Detail CSV. Importer bisa mengubah beberapa field ke uppercase, tetapi uppercase membuat file lebih mudah diaudit.
@@ -308,6 +332,7 @@ Gunakan uppercase untuk Full Detail CSV. Importer bisa mengubah beberapa field k
 | `business_event.event_type` | `AFFILIATE_JOINED`, `AFFILIATE_UPGRADED`, `PHYSICAL_PRODUCT_PURCHASED`, `CP_PRODUCT_SOLD`, `GIM_SIGNUP_COMPLETED`, `IMATRIX_PURCHASE_COMPLETED`, `REWARD_ACCRUED`, `POOL_FUNDED`, `POOL_DISTRIBUTED`, `QUALIFICATION_WINDOW_OPENED`, `QUALIFICATION_ACHIEVED`, `CASHOUT_REQUESTED`, `CASHOUT_APPROVED`, `CASHOUT_PAID` | Kejadian yang terjadi di sistem bisnis. |
 | `cashout_event.event_type` | `REQUESTED`, `APPROVED`, `PAID`, `REJECTED` | Status cash-out. Hanya `PAID` yang menjadi cash paid out aktual. |
 | `unit` / `threshold_unit` | `USD`, `PC`, `SP`, `COUNT`, `SHARE` | Satuan jumlah. |
+| `payment_method` | `FIAT`, `PC`, `ALPHA`, `MIXED` | Cara customer/member membayar. `FIAT` adalah cash baru; `PC`/`ALPHA` adalah internal credit; `MIXED` adalah gabungan keduanya. |
 | `pc_entry.entry_type` | `GRANT`, `SPEND`, `ADJUSTMENT` | PC diberikan, dipakai internal, atau disesuaikan. |
 | `sp_entry.entry_type` | `ACCRUAL`, `DISTRIBUTION`, `ADJUSTMENT` | SP bertambah, didistribusikan, atau disesuaikan. |
 | `pool_entry.entry_type` | `FUNDING`, `DISTRIBUTION`, `ALLOCATION`, `ADJUSTMENT` | Pool didanai, didistribusikan, dialokasikan, atau disesuaikan. |

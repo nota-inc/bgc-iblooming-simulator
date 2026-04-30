@@ -89,6 +89,7 @@ Important: the radar normalizes different metrics so they can be seen together. 
 | Metric | Good direction | Meaning |
 | --- | --- | --- |
 | Cash In | Higher | More total business cash collected. |
+| Internal Credit Used | Higher when intentional | More PC/ALPHA/internal credit is used inside the ecosystem. This should be read separately from Cash In. |
 | Revenue Kept | Higher | More revenue retained by the company. |
 | Partner Payout | Lower for treasury, but must respect business model | Cash passed through to partners/creators. |
 | Direct Rewards Owed | Lower for treasury | Direct reward obligations. |

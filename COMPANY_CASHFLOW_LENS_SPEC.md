@@ -12,6 +12,7 @@ Plain-language note: this spec explains money metrics. For the snapshot fields t
 ## Principles
 
 - `cash in` must stay separate from `PC`, `SP/LTS`, and reward basis.
+- `cash in` must also stay separate from internal credit spend. PC/ALPHA payments can show ecosystem usage without creating new fiat cash.
 - `retained revenue` must stay separate from `gross cash in`.
 - `reward obligations created` must stay separate from `actual payouts out`.
 - `pool funding obligations` must stay separate from both direct rewards and actual payouts.
@@ -23,11 +24,23 @@ Plain-language note: this spec explains money metrics. For the snapshot fields t
 - Meaning:
   Gross business cash collected before pass-through partner payouts or internal obligations.
 - Source:
-  `metadata.recognized_revenue_basis`
+  `metadata.cash_in_usd`, then `metadata.recognized_revenue_basis`
 - Row logic:
+  - explicit `cash_in_usd` wins when present
   - `bgc`: `entry_fee_usd`
-  - `iblooming`: `gross_sale_usd`
+  - `iblooming` with `payment_method = FIAT`: `gross_sale_usd`
+  - `iblooming` with `payment_method = PC` or `ALPHA`: `0` unless explicit `cash_in_usd` is provided
   - fallback: `recognizedRevenueUsd` when no better basis exists
+
+### `company_internal_credit_spent_total`
+- Meaning:
+  PC, ALPHA, or other internal credit used to buy products inside the ecosystem.
+- Source:
+  `metadata.internal_credit_spent_usd`
+- Fallback source:
+  `sinkSpendUsd` when explicit internal-credit spend is not provided.
+- Important:
+  this is not new cash. It explains ecosystem usage and should be read next to `cash in`, not merged into it.
 
 ### `company_retained_revenue_total`
 - Meaning:
@@ -93,6 +106,7 @@ Plain-language note: this spec explains money metrics. For the snapshot fields t
 The engine first builds a per-period financial ledger:
 
 - `grossCashIn`
+- `internalCreditSpent`
 - `retainedRevenue`
 - `partnerPayoutOut`
 - `directRewardObligation`

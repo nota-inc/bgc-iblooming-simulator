@@ -535,7 +535,7 @@ function buildCompareReport(runs: CompareRunRecord[]) {
             },
             {
               primary: `Cash In ${formatCommonMetricValue("company_gross_cash_in_total", row.grossCashIn)} · Revenue Kept ${formatCommonMetricValue("company_retained_revenue_total", row.retainedRevenue)}`,
-              secondary: `Partner ${formatCommonMetricValue("company_partner_payout_out_total", row.partnerPayoutOut)} · Direct Rewards ${formatCommonMetricValue("company_direct_reward_obligation_total", row.directObligations)} · Net Cash ${formatCommonMetricValue("company_net_treasury_delta_total", row.netTreasuryDelta)}`
+              secondary: `Partner ${formatCommonMetricValue("company_partner_payout_out_total", row.partnerPayoutOut)} · Internal Credit ${formatCommonMetricValue("company_internal_credit_spent_total", row.internalCreditSpent)} · Direct Rewards ${formatCommonMetricValue("company_direct_reward_obligation_total", row.directObligations)} · Net Cash ${formatCommonMetricValue("company_net_treasury_delta_total", row.netTreasuryDelta)}`
             },
             {
               primary: `${formatCommonMetricValue("company_actual_payout_out_total", row.actualPayoutOut)} paid out · ${formatCommonMetricValue("company_product_fulfillment_out_total", row.fulfillmentOut)} fulfillment`,

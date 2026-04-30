@@ -459,7 +459,10 @@ export function parseCanonicalCsvSnapshotText(text: string): CanonicalSnapshotPa
           unit: readOptionalString(row, "unit")?.toUpperCase() ?? null,
           metadata: buildMetadata(row, rowRef, {
             recognized_revenue_usd: readOptionalNumber(row, "recognized_revenue_usd", rowRef),
-            gross_margin_usd: readOptionalNumber(row, "gross_margin_usd", rowRef)
+            gross_margin_usd: readOptionalNumber(row, "gross_margin_usd", rowRef),
+            cash_in_usd: readOptionalNumber(row, "cash_in_usd", rowRef),
+            internal_credit_spent_usd: readOptionalNumber(row, "internal_credit_spent_usd", rowRef),
+            payment_method: readOptionalString(row, "payment_method")?.toUpperCase() ?? null
           })
         });
         break;
@@ -472,7 +475,9 @@ export function parseCanonicalCsvSnapshotText(text: string): CanonicalSnapshotPa
           effective_period: requireField(row, "effective_period", rowRef),
           amount_pc: requireNumber(row, "amount_pc", rowRef),
           metadata: buildMetadata(row, rowRef, {
-            sink_spend_usd: readOptionalNumber(row, "sink_spend_usd", rowRef)
+            sink_spend_usd: readOptionalNumber(row, "sink_spend_usd", rowRef),
+            internal_credit_spent_usd: readOptionalNumber(row, "internal_credit_spent_usd", rowRef),
+            payment_method: readOptionalString(row, "payment_method")?.toUpperCase() ?? null
           })
         });
         break;
