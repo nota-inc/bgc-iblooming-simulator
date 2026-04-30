@@ -13,6 +13,7 @@ export const summaryMetricsSchema = z.object({
   company_gross_cash_in_total: z.number(),
   company_retained_revenue_total: z.number(),
   company_partner_payout_out_total: z.number(),
+  company_internal_credit_spent_total: z.number(),
   company_direct_reward_obligation_total: z.number(),
   company_pool_funding_obligation_total: z.number(),
   company_actual_payout_out_total: z.number(),

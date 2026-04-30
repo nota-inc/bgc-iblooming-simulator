@@ -140,6 +140,15 @@ export const summaryMetricDefinitions: SummaryMetricDefinition[] = [
     unit: "usd",
   },
   {
+    key: "company_internal_credit_spent_total",
+    label: "Internal Credit Used",
+    shortLabel: "Credit Used",
+    description:
+      "PC, ALPHA, or other internal credit used to buy products inside the ecosystem. This is not new cash coming in.",
+    group: "cashflow",
+    unit: "usd",
+  },
+  {
     key: "company_direct_reward_obligation_total",
     label: "Direct Rewards Owed",
     shortLabel: "Direct Rewards",

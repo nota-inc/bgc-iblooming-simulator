@@ -79,6 +79,7 @@ function getTokenFlowEvidenceBadge(status: string) {
 const cashflowBasisMetricKeys = [
   "company_gross_cash_in_total",
   "company_retained_revenue_total",
+  "company_internal_credit_spent_total",
   "company_net_treasury_delta_total",
   "payout_inflow_ratio",
   "reserve_runway_months",
@@ -88,6 +89,7 @@ const cashflowBasisMetricKeys = [
 const cashflowBasisMetricLabels: Record<(typeof cashflowBasisMetricKeys)[number], string> = {
   company_actual_payout_out_total: "Cash Paid Out",
   company_gross_cash_in_total: "Cash In",
+  company_internal_credit_spent_total: "Internal Credit Used",
   company_net_treasury_delta_total: "Net Cash Change",
   company_retained_revenue_total: "Revenue Kept",
   payout_inflow_ratio: "Treasury Pressure",

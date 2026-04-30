@@ -81,7 +81,7 @@ These are the choices in the `Check method` dropdown.
 
 Monthly CSV is the easiest input format. One row means: one member, one source system, one month.
 
-Required columns are the first 12 columns. The last 6 columns are optional but recommended because they improve treasury and member-history reading.
+The core required columns are marked `Yes`. The cash-basis columns are recommended because they prevent the engine from confusing new cash with internal credit use.
 
 | Column | Required | Meaning |
 | --- | --- | --- |
@@ -99,6 +99,9 @@ Required columns are the first 12 columns. The last 6 columns are optional but r
 | `active_member` | Yes | Whether the member is active in that month. Accepted values: `true`, `false`, `1`, `0`, `yes`, `no`, `y`, `n`. |
 | `recognized_revenue_usd` | Recommended | Revenue the company recognizes from that row. Used for cashflow and treasury support. |
 | `gross_margin_usd` | Optional | Gross margin if known. Leave blank if unknown. |
+| `cash_in_usd` | Recommended | New fiat cash collected in this row. For BGC entry/upgrade this usually equals the fee paid. For iBLOOMING paid with PC/ALPHA, this should be `0`. |
+| `internal_credit_spent_usd` | Recommended | USD value of PC/ALPHA/internal credit spent in this row. This is ecosystem usage, not new cash. |
+| `payment_method` | Recommended | How the transaction was paid. Accepted values: `FIAT`, `PC`, `ALPHA`, `MIXED`. |
 | `member_join_period` | Recommended | First month the member joined. Use `YYYY-MM`. |
 | `is_affiliate` | Recommended | Whether the member is treated as an affiliate. Same boolean values as `active_member`. |
 | `cross_app_active` | Recommended | Whether the member is active across BGC and iBLOOMING. Same boolean values as `active_member`. |
@@ -117,9 +120,12 @@ Monthly CSV rows are already summarized. That means the spreadsheet owner is res
 | `global_reward_usd` | Direct/global rewards owed or distributed to members, such as BGC RR/GR or iBLOOMING rebate reward families. | The engine treats this as imported reward obligation value. If non-zero, `extra_json.global_reward_breakdown_usd` should explain which reward family produced it. |
 | `pool_reward_usd` | Pool distribution value paid or allocated to members. | The engine treats this as imported pool reward value. If non-zero, `extra_json.pool_reward_breakdown_usd` should explain which pool produced it. |
 | `cashout_usd` | Cash-out that was paid, or approved if payment detail is not separated yet. | This is actual cash leaving the ecosystem. It is separate from reward accrual and separate from internal ALPHA use. Put `0` when there is no cash-out. |
-| `sink_spend_usd` | Internal-use spend inside the ecosystem, for example paying for an iBLOOMING/iBoomie product with ALPHA/PC. | This feeds Actual ALPHA Used. It is not company revenue by itself and it is not cash paid out. For iBLOOMING sales, the current compatibility rule expects this to match gross sale value when the row carries gross sale basis. |
+| `sink_spend_usd` | Internal-use spend inside the ecosystem, for example paying for an iBLOOMING/iBoomie product with ALPHA/PC. | This feeds Actual ALPHA Used. It is not company revenue by itself and it is not cash paid out. For iBLOOMING paid with `PC` or `ALPHA`, this should match `internal_credit_spent_usd`. For `FIAT`, this is usually `0`. |
 | `recognized_revenue_usd` | Revenue the company recognizes from the event or monthly row. | For BGC this usually comes from entry/upgrade fee basis. For iBLOOMING this should be platform revenue, currently validated as `30%` of gross sale when gross sale basis is provided. |
 | `gross_margin_usd` | Gross margin after direct cost, if the source system or finance team knows it. | The engine does not invent gross margin when it is blank. It uses the provided value for evidence and reporting when available. |
+| `cash_in_usd` | New fiat cash collected from the customer or member in this row. | Overrides the engine's cash-in inference. Use it to show that iBLOOMING sales paid with PC/ALPHA are not new fiat cash. |
+| `internal_credit_spent_usd` | Internal credit value spent by the user, such as PC or ALPHA used to buy an iBLOOMING/iBoomie product. | Feeds the `Internal Credit Used` money metric and helps explain `sink_spend_usd`. It does not increase `Cash In`. |
+| `payment_method` | Payment route for the business event. | `FIAT` means new cash. `PC` and `ALPHA` mean internal credit. `MIXED` means the row contains both fiat and internal credit. |
 | `active_member`, `member_tier`, `member_join_period`, `is_affiliate`, `cross_app_active` | Member status and lifecycle data from CRM, membership, or role history. | These fields affect activity multipliers, lifecycle reading, and eligibility-style interpretation in scenario runs. |
 
 ### Current BGC Tier Rule Table
@@ -231,6 +237,9 @@ Use extra `member_alias` rows only when the same internal member has more than o
 | `unit` | `business_event`, `reward_obligation`, `pool_entry` | Unit for `amount`, for example `USD`, `PC`, or `SP`. |
 | `recognized_revenue_usd` | `business_event` | Revenue recognized by the company from this event. Used in cashflow and treasury metrics. |
 | `gross_margin_usd` | `business_event` | Gross margin from this event if known. |
+| `cash_in_usd` | `business_event` | New fiat cash collected by this event. Use `0` when the product was paid with PC/ALPHA only. |
+| `internal_credit_spent_usd` | `business_event`, `pc_entry` | USD value of PC/ALPHA/internal credit spent. This is ecosystem usage, not new fiat cash. |
+| `payment_method` | `business_event`, `pc_entry` | Payment method: `FIAT`, `PC`, `ALPHA`, or `MIXED`. |
 | `entry_type` | `pc_entry`, `sp_entry`, `pool_entry` | Ledger movement type. Values depend on the row type. |
 | `amount_pc` | `pc_entry` | PC amount for one PC ledger movement. |
 | `amount_sp` | `sp_entry` | SP / Sales Point amount for one reward-basis ledger movement. |
@@ -283,6 +292,21 @@ Full Detail CSV contains source-detail rows. During import, the engine derives m
 | `cashout_event` with `APPROVED` and no matching `PAID` row | Approved cash-out when payment detail is not separated. | Adds to `cashout_usd` so the simulator can still reflect expected payout. |
 | `qualification_window` and `qualification_status` | Qualification windows and status history, such as WEC or CPR. | Improves source-detail checks and eligibility evidence. It does not create revenue by itself. |
 
+## Full Detail Event Calculators
+
+When Full Detail CSV/JSON has source events, the engine can derive several monthly values instead of requiring you to pre-summarize every number.
+
+| Source detail | Engine-derived output |
+| --- | --- |
+| BGC affiliate join/upgrade event plus PC/SP ledger rows | Monthly BGC revenue, PC, SP/LTS, RR, GPSP funding, and WEC pool funding. |
+| BGC event metadata `bgc_miracle_cash_usd` or `miracle_cash_usd` | `BGC_MIRACLE_CASH` reward. |
+| iBLOOMING `CP_PRODUCT_SOLD` with recognized revenue basis | `IB_LR` and `IB_MIRACLE_CASH`. |
+| iBLOOMING event with `cpr_year` | `IB_CPR` using year 1 or year 2 rate. |
+| iBLOOMING `GIM_SIGNUP_COMPLETED` with `tier` and `quantity` | `IB_GRR`. |
+| iBLOOMING `IMATRIX_PURCHASE_COMPLETED` with `tier`, `imatrix_plan`, and `quantity` | `IB_IRR`. |
+| `pool_entry` rows or event `metadata.pool_funding_basis` | Pool facts for GPSP, WEC Pool, GPS, GMP, GEC, or any named pool code present in the file. |
+| `role_history`, `qualification_window`, `qualification_status` | CP, Executive CP, WEC, CPR, and other eligibility/status evidence over time. Eligibility is not treated as active status unless the status row says so. |
+
 ## Columns With Fixed Choices
 
 Use uppercase values for Full Detail CSV. The importer uppercases many fields, but uppercase keeps the file easier to audit.
@@ -295,6 +319,7 @@ Use uppercase values for Full Detail CSV. The importer uppercases many fields, b
 | `business_event.event_type` | `AFFILIATE_JOINED`, `AFFILIATE_UPGRADED`, `PHYSICAL_PRODUCT_PURCHASED`, `CP_PRODUCT_SOLD`, `GIM_SIGNUP_COMPLETED`, `IMATRIX_PURCHASE_COMPLETED`, `REWARD_ACCRUED`, `POOL_FUNDED`, `POOL_DISTRIBUTED`, `QUALIFICATION_WINDOW_OPENED`, `QUALIFICATION_ACHIEVED`, `CASHOUT_REQUESTED`, `CASHOUT_APPROVED`, `CASHOUT_PAID` | What happened in the business system. |
 | `cashout_event.event_type` | `REQUESTED`, `APPROVED`, `PAID`, `REJECTED` | Status of a cash-out event. Only `PAID` becomes actual cash paid out. |
 | `unit` / `threshold_unit` | `USD`, `PC`, `SP`, `COUNT`, `SHARE` | Unit for the amount. |
+| `payment_method` | `FIAT`, `PC`, `ALPHA`, `MIXED` | How the customer/member paid. `FIAT` is new cash; `PC`/`ALPHA` are internal credit; `MIXED` is both. |
 | `pc_entry.entry_type` | `GRANT`, `SPEND`, `ADJUSTMENT` | PC was granted, spent internally, or adjusted. |
 | `sp_entry.entry_type` | `ACCRUAL`, `DISTRIBUTION`, `ADJUSTMENT` | SP was accrued, distributed, or adjusted. |
 | `pool_entry.entry_type` | `FUNDING`, `DISTRIBUTION`, `ALLOCATION`, `ADJUSTMENT` | Pool money was funded, distributed, allocated, or adjusted. |

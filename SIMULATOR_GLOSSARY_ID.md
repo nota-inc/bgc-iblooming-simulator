@@ -95,7 +95,17 @@ Objek ini menyimpan satu observasi member-bulan dengan field seperti:
 - `poolRewardUsd`
 - `cashoutUsd`
 - `sinkSpendUsd`
+- `cashInUsd` di metadata
+- `internalCreditSpentUsd` di metadata
+- `paymentMethod` di metadata
 - `activeMember`
+
+Aturan cash sederhana:
+
+- `cashInUsd` adalah cash fiat baru yang masuk ke bisnis.
+- `internalCreditSpentUsd` adalah PC/ALPHA/internal credit yang dipakai di dalam ecosystem.
+- `paymentMethod` menjelaskan apakah row dibayar dengan `FIAT`, `PC`, `ALPHA`, atau `MIXED`.
+- `sinkSpendUsd` adalah pemakaian internal ecosystem. Nilainya bisa berasal dari PC/ALPHA dan tidak otomatis menjadi cash baru.
 
 ### Full Detail CSV
 

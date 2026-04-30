@@ -56,6 +56,7 @@ Metric ini memakai USD dan harus dipisahkan dari pergerakan ALPHA.
 | UI label | Metric key | Artinya |
 | --- | --- | --- |
 | Cash In | `company_gross_cash_in_total` | Total uang bisnis yang masuk sebelum payout, pass-through split, atau outflow lain. |
+| Internal Credit Used | `company_internal_credit_spent_total` | PC, ALPHA, atau internal credit lain yang dipakai di ecosystem. Ini usage, bukan cash baru. |
 | Revenue Kept | `company_retained_revenue_total` | Revenue yang tetap dipegang perusahaan setelah bagian partner/creator dipisahkan. |
 | Partner Payout | `company_partner_payout_out_total` | Cash yang diteruskan ke partner atau creator, misalnya creator share CP. |
 | Direct Rewards Owed | `company_direct_reward_obligation_total` | Kewajiban direct reward dari uploaded business data. |

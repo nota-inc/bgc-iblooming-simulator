@@ -44,6 +44,26 @@ type PoolAccumulator = {
   distributionEntryCount: number;
 };
 
+type DerivedRewardEntry = {
+  periodKey: string;
+  memberKey: string;
+  sourceSystem: "BGC" | "IBLOOMING";
+  rewardSourceCode: string;
+  unit: "USD" | "PC" | "SP" | "COUNT" | "SHARE";
+  amount: number;
+};
+
+type DerivedPoolEntry = {
+  periodKey: string;
+  poolCode: string;
+  distributionCycle: string;
+  unit: "USD" | "PC" | "SP" | "COUNT" | "SHARE";
+  fundingAmount: number;
+  distributionAmount: number;
+  recipientKey: string | null;
+  shareCount: number;
+};
+
 type DerivedSnapshotData = {
   memberMonthFacts: SnapshotMemberMonthFactInput[];
   rewardSourcePeriodFacts: SnapshotRewardSourcePeriodFactInput[];
@@ -76,6 +96,66 @@ const SINK_DEFAULT_EVENT_TYPES = new Set([
   "GIM_SIGNUP_COMPLETED",
   "IMATRIX_PURCHASE_COMPLETED"
 ]);
+
+const BGC_TIER_RULES = {
+  PATHFINDER: {
+    entryFeeUsd: 100,
+    pcVolume: 10_000,
+    spRewardBasis: 70,
+    rrTier1Pct: 0.1,
+    grTier2Pct: 0,
+    grTier3Pct: 0
+  },
+  VOYAGER: {
+    entryFeeUsd: 500,
+    pcVolume: 50_000,
+    spRewardBasis: 350,
+    rrTier1Pct: 0.1,
+    grTier2Pct: 0.13,
+    grTier3Pct: 0.16
+  },
+  EXPLORER: {
+    entryFeeUsd: 1_725,
+    pcVolume: 172_500,
+    spRewardBasis: 1_207,
+    rrTier1Pct: 0.12,
+    grTier2Pct: 0.14,
+    grTier3Pct: 0.17
+  },
+  PIONEER: {
+    entryFeeUsd: 2_875,
+    pcVolume: 287_500,
+    spRewardBasis: 2_012,
+    rrTier1Pct: 0.15,
+    grTier2Pct: 0.15,
+    grTier3Pct: 0.18
+  },
+  SPECIAL: {
+    entryFeeUsd: 11_500,
+    pcVolume: 1_150_000,
+    spRewardBasis: 8_050,
+    rrTier1Pct: 0.15,
+    grTier2Pct: 0.15,
+    grTier3Pct: 0.18
+  }
+} as const;
+
+const BGC_TIER_BY_ENTRY_FEE: Map<number, keyof typeof BGC_TIER_RULES> = new Map(
+  (Object.entries(BGC_TIER_RULES) as Array<[keyof typeof BGC_TIER_RULES, (typeof BGC_TIER_RULES)[keyof typeof BGC_TIER_RULES]]>).map(
+    ([tierCode, rule]) => [rule.entryFeeUsd, tierCode] as const
+  )
+);
+
+const IB_GRR_RATES = {
+  1: 3,
+  2: 0.8
+} as const;
+
+const IB_IRR_RATES: Record<string, Record<1 | 2, number>> = {
+  FOUNDATION: { 1: 0.6, 2: 0.25 },
+  PRO: { 1: 5, 2: 2.5 },
+  EXPERT: { 1: 12, 2: 5 }
+};
 
 function toCompatibilityDirectRewardUsdEquivalent(
   rewardSourceCode: string,
@@ -197,6 +277,31 @@ function readMetadataNumber(metadata: unknown, ...keys: string[]) {
   }
 
   return null;
+}
+
+function readNestedMetadataNumber(metadata: unknown, recordKey: string, ...keys: string[]) {
+  return readMetadataNumber(readMetadataRecord(metadata)?.[recordKey], ...keys);
+}
+
+function resolveBcgTierFromEvent(event: CanonicalBusinessEvent) {
+  const metadataTier = readMetadataString(event.metadata, "member_tier", "memberTier", "origin_join_level");
+  const normalizedTier = metadataTier?.toUpperCase();
+
+  if (normalizedTier && normalizedTier in BGC_TIER_RULES) {
+    return normalizedTier as keyof typeof BGC_TIER_RULES;
+  }
+
+  const entryFeeUsd =
+    readNestedMetadataNumber(event.metadata, "recognized_revenue_basis", "entry_fee_usd", "entryFeeUsd") ??
+    readMetadataNumber(event.metadata, "entry_fee_usd", "entryFeeUsd");
+
+  return entryFeeUsd !== null
+    ? (BGC_TIER_BY_ENTRY_FEE.get(entryFeeUsd) as keyof typeof BGC_TIER_RULES | undefined) ?? null
+    : null;
+}
+
+function hasExplicitSourceEntry(sourceEventRef: string, sourceRefs: Set<string>) {
+  return sourceRefs.has(sourceEventRef);
 }
 
 function lowerFactSourceSystem(sourceSystem: CanonicalSourceSystem) {
@@ -366,7 +471,16 @@ function copyCompatibilityMetadataFields(
     ["source_of_truth_reference", "sourceOfTruthReference"],
     ["recognized_revenue_basis", "recognizedRevenueBasis"],
     ["gross_margin_basis", "grossMarginBasis"],
-    ["accountability_checks", "accountabilityChecks"]
+    ["accountability_checks", "accountabilityChecks"],
+    ["global_reward_breakdown_usd", "globalRewardBreakdownUsd"],
+    ["pool_reward_breakdown_usd", "poolRewardBreakdownUsd"],
+    ["sink_breakdown_usd", "sinkBreakdownUsd"],
+    ["pool_funding_basis", "poolFundingBasis"],
+    ["pool_share_snapshot", "poolShareSnapshot"],
+    ["cash_in_usd", "cashInUsd"],
+    ["internal_credit_spent_usd", "internalCreditSpentUsd"],
+    ["payment_method", "paymentMethod"],
+    ["product_fulfillment_out_usd", "productFulfillmentOutUsd"]
   ] as const;
 
   for (const [fieldKey, aliasKey] of fieldAliases) {
@@ -745,6 +859,23 @@ export function buildDerivedSnapshotDataFromCanonical(
   const rows = new Map<string, WorkingRow>();
   const memberSystemKeys = new Set<string>();
   const eventRefsWithPcSpend = resolveEventOfferCodeSet(payload);
+  const eventRefsWithSpEntry = new Set(
+    payload.sp_entries
+      .map((entry) => entry.source_event_ref)
+      .filter((value): value is string => typeof value === "string" && value.length > 0)
+  );
+  const explicitRewardKeys = new Set(
+    payload.reward_obligations
+      .filter((entry) => entry.source_event_ref)
+      .map((entry) => `${entry.source_event_ref}::${entry.reward_source_code}`)
+  );
+  const explicitPoolFundingKeys = new Set(
+    payload.pool_entries
+      .filter((entry) => entry.source_event_ref && entry.entry_type === "FUNDING")
+      .map((entry) => `${entry.source_event_ref}::${entry.pool_code}`)
+  );
+  const derivedRewardEntries: DerivedRewardEntry[] = [];
+  const derivedPoolEntries: DerivedPoolEntry[] = [];
   const paidCashoutKeys = new Set<string>();
 
   addActivityPeriodsFromRoleHistories(payload, memberSystemKeys, memberMetadata, rows, options);
@@ -796,8 +927,11 @@ export function buildDerivedSnapshotDataFromCanonical(
 
     const explicitSinkSpendUsd =
       readMetadataNumber(event.metadata, "sink_spend_usd", "sinkSpendUsd") ?? null;
+    const explicitInternalCreditSpentUsd =
+      readMetadataNumber(event.metadata, "internal_credit_spent_usd", "internalCreditSpentUsd") ?? null;
     const defaultSinkSpendUsd =
       explicitSinkSpendUsd ??
+      explicitInternalCreditSpentUsd ??
       (SINK_DEFAULT_EVENT_TYPES.has(event.event_type) &&
       event.unit === "USD" &&
       typeof event.amount === "number" &&
@@ -808,6 +942,177 @@ export function buildDerivedSnapshotDataFromCanonical(
     if (defaultSinkSpendUsd > 0) {
       row.sinkSpendUsd = roundMetric(row.sinkSpendUsd + defaultSinkSpendUsd);
       addBreakdownValue(row.metadata, "sinkBreakdownUsd", event.event_type, defaultSinkSpendUsd);
+    }
+
+    const addDerivedReward = (
+      rewardSourceCode: string,
+      rewardMemberKey: string | null | undefined,
+      amount: number,
+      metadata: Record<string, unknown> = {}
+    ) => {
+      if (!rewardMemberKey || !(amount > 0)) {
+        return;
+      }
+
+      if (explicitRewardKeys.has(`${event.event_ref}::${rewardSourceCode}`)) {
+        return;
+      }
+
+      const rewardSource = rewardSourceSystem(rewardSourceCode);
+      const rewardRow = ensureWorkingRow(
+        rows,
+        event.effective_period,
+        rewardMemberKey,
+        rewardSource,
+        resolveGroupKey(memberMetadata.get(rewardMemberKey))
+      );
+      rewardRow.activeMember = true;
+      memberSystemKeys.add(buildMemberSystemKey(rewardMemberKey, rewardSource));
+      rewardRow.globalRewardUsd = roundMetric(rewardRow.globalRewardUsd + amount);
+      addBreakdownValue(rewardRow.metadata, "globalRewardBreakdownUsd", rewardSourceCode, amount);
+      applyRewardCountMetadata(rewardRow.metadata, rewardSourceCode, metadata);
+      derivedRewardEntries.push({
+        periodKey: event.effective_period,
+        memberKey: rewardMemberKey,
+        sourceSystem: rewardSource,
+        rewardSourceCode,
+        unit: "USD",
+        amount: roundMetric(amount)
+      });
+    };
+
+    const addDerivedPoolFunding = (
+      poolCode: string,
+      amount: number,
+      distributionCycle = "MONTHLY",
+      distributionAmount = 0
+    ) => {
+      if (!(amount > 0) || explicitPoolFundingKeys.has(`${event.event_ref}::${poolCode}`)) {
+        return;
+      }
+
+      derivedPoolEntries.push({
+        periodKey: event.effective_period,
+        poolCode,
+        distributionCycle,
+        unit: "USD",
+        fundingAmount: roundMetric(amount),
+        distributionAmount: roundMetric(distributionAmount),
+        recipientKey: null,
+        shareCount: 0
+      });
+    };
+
+    if (event.source_system === "BGC" && ["AFFILIATE_JOINED", "AFFILIATE_UPGRADED"].includes(event.event_type)) {
+      const tier = resolveBcgTierFromEvent(event);
+
+      if (tier) {
+        const rule = BGC_TIER_RULES[tier];
+
+        if (!hasExplicitSourceEntry(event.event_ref, eventRefsWithPcSpend)) {
+          row.pcVolume = roundMetric(row.pcVolume + rule.pcVolume);
+          addBreakdownValue(row.metadata, "pcBreakdown", "CALCULATED_BGC_ENTRY", rule.pcVolume);
+        }
+
+        if (!hasExplicitSourceEntry(event.event_ref, eventRefsWithSpEntry)) {
+          row.spRewardBasis = roundMetric(row.spRewardBasis + rule.spRewardBasis);
+          addBreakdownValue(row.metadata, "spBreakdown", "CALCULATED_BGC_LTS", rule.spRewardBasis);
+        }
+
+        const rewardRecipient =
+          event.beneficiary_member_stable_key ??
+          event.related_member_stable_key ??
+          event.actor_member_stable_key;
+        addDerivedReward("BGC_RR", rewardRecipient, rule.spRewardBasis * rule.rrTier1Pct, {
+          origin_join_level: tier
+        });
+
+        const bgcMiracleCashUsd = readMetadataNumber(
+          event.metadata,
+          "bgc_miracle_cash_usd",
+          "miracle_cash_usd",
+          "miracleCashUsd"
+        );
+        if (bgcMiracleCashUsd !== null) {
+          addDerivedReward("BGC_MIRACLE_CASH", rewardRecipient, bgcMiracleCashUsd);
+        }
+
+        addDerivedPoolFunding("BGC_GPSP_MONTHLY_POOL", rule.spRewardBasis * 0.15, "MONTHLY");
+        addDerivedPoolFunding("BGC_WEC_QUARTERLY_POOL", rule.spRewardBasis * 0.03, "QUARTERLY");
+      }
+    }
+
+    if (
+      event.source_system === "IBLOOMING" &&
+      ["CP_PRODUCT_SOLD", "GIM_SIGNUP_COMPLETED", "IMATRIX_PURCHASE_COMPLETED"].includes(event.event_type)
+    ) {
+      const recognizedRevenueBasis = readMetadataRecord(
+        readMetadataRecord(event.metadata)?.recognized_revenue_basis ??
+          readMetadataRecord(event.metadata)?.recognizedRevenueBasis
+      );
+      const platformRevenueUsd =
+        readMetadataNumber(recognizedRevenueBasis, "ib_platform_revenue_usd", "ibPlatformRevenueUsd") ??
+        readMetadataNumber(event.metadata, "ib_platform_revenue_usd", "ibPlatformRevenueUsd") ??
+        0;
+      const rewardRecipient =
+        event.beneficiary_member_stable_key ??
+        event.related_member_stable_key ??
+        event.actor_member_stable_key;
+
+      if (event.event_type === "CP_PRODUCT_SOLD") {
+        addDerivedReward("IB_LR", rewardRecipient, platformRevenueUsd * 0.1);
+      }
+
+      addDerivedReward("IB_MIRACLE_CASH", rewardRecipient, platformRevenueUsd * 0.01);
+
+      const cprYear = readMetadataNumber(event.metadata, "cpr_year", "cprYear");
+      if (cprYear === 1 || cprYear === 2) {
+        addDerivedReward("IB_CPR", rewardRecipient, platformRevenueUsd * (cprYear === 1 ? 0.05 : 0.025), {
+          cpr_year: cprYear
+        });
+      }
+
+      const tier = readMetadataNumber(event.metadata, "tier", "reward_tier", "rewardTier");
+      const quantity = typeof event.quantity === "number" && event.quantity > 0 ? event.quantity : 1;
+
+      if (event.event_type === "GIM_SIGNUP_COMPLETED" && (tier === 1 || tier === 2)) {
+        addDerivedReward("IB_GRR", rewardRecipient, quantity * IB_GRR_RATES[tier], { tier });
+      }
+
+      if (event.event_type === "IMATRIX_PURCHASE_COMPLETED" && (tier === 1 || tier === 2)) {
+        const plan = readMetadataString(event.metadata, "imatrix_plan", "plan")?.toUpperCase();
+        const rate = plan ? IB_IRR_RATES[plan]?.[tier] : null;
+
+        if (rate) {
+          addDerivedReward("IB_IRR", rewardRecipient, quantity * rate, {
+            tier,
+            imatrix_plan: plan
+          });
+        }
+      }
+    }
+
+    const poolFundingBasis = readMetadataRecord(
+      readMetadataRecord(event.metadata)?.pool_funding_basis ??
+        readMetadataRecord(event.metadata)?.poolFundingBasis
+    );
+
+    if (poolFundingBasis) {
+      for (const [poolCode, poolValue] of Object.entries(poolFundingBasis)) {
+        const poolRecord = readMetadataRecord(poolValue);
+
+        if (!poolRecord) {
+          continue;
+        }
+
+        const fundingAmount = readMetadataNumber(poolRecord, "funding_amount", "fundingAmount") ?? 0;
+        const distributionAmount =
+          readMetadataNumber(poolRecord, "distribution_amount", "distributionAmount") ?? 0;
+        const distributionCycle =
+          readMetadataString(poolRecord, "distribution_cycle", "distributionCycle") ?? "MONTHLY";
+
+        addDerivedPoolFunding(poolCode, fundingAmount, distributionCycle, distributionAmount);
+      }
     }
   }
 
@@ -1075,6 +1380,31 @@ export function buildDerivedSnapshotDataFromCanonical(
     rewardSourcePeriodFactsMap.set(accumulatorKey, current);
   }
 
+  for (const reward of derivedRewardEntries) {
+    const accumulatorKey = [
+      reward.periodKey,
+      reward.sourceSystem,
+      reward.rewardSourceCode,
+      reward.unit
+    ].join("::");
+    const current =
+      rewardSourcePeriodFactsMap.get(accumulatorKey) ??
+      ({
+        periodKey: reward.periodKey,
+        sourceSystem: reward.sourceSystem,
+        rewardSourceCode: reward.rewardSourceCode,
+        unit: reward.unit,
+        amount: 0,
+        obligationCount: 0,
+        beneficiaryKeys: new Set<string>()
+      } satisfies RewardSourceAccumulator);
+
+    current.amount += reward.amount;
+    current.obligationCount += 1;
+    current.beneficiaryKeys.add(reward.memberKey);
+    rewardSourcePeriodFactsMap.set(accumulatorKey, current);
+  }
+
   const rewardSourcePeriodFacts: SnapshotRewardSourcePeriodFactInput[] = [
     ...rewardSourcePeriodFactsMap.values()
   ]
@@ -1143,6 +1473,40 @@ export function buildDerivedSnapshotDataFromCanonical(
       current.fundingEntryCount += 1;
     }
 
+    poolPeriodFactsMap.set(accumulatorKey, current);
+  }
+
+  for (const entry of derivedPoolEntries) {
+    const accumulatorKey = [
+      entry.periodKey,
+      entry.poolCode,
+      entry.distributionCycle,
+      entry.unit
+    ].join("::");
+    const current =
+      poolPeriodFactsMap.get(accumulatorKey) ??
+      ({
+        periodKey: entry.periodKey,
+        poolCode: entry.poolCode,
+        distributionCycle: entry.distributionCycle,
+        unit: entry.unit,
+        fundingAmount: 0,
+        distributionAmount: 0,
+        recipientKeys: new Set<string>(),
+        shareCountTotal: 0,
+        fundingEntryCount: 0,
+        distributionEntryCount: 0
+      } satisfies PoolAccumulator);
+
+    current.fundingAmount += entry.fundingAmount;
+    current.fundingEntryCount += 1;
+    current.distributionAmount += entry.distributionAmount;
+
+    if (entry.recipientKey) {
+      current.recipientKeys.add(entry.recipientKey);
+    }
+
+    current.shareCountTotal += entry.shareCount;
     poolPeriodFactsMap.set(accumulatorKey, current);
   }
 

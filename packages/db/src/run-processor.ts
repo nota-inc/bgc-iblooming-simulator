@@ -168,6 +168,15 @@ function readStringAlias(
   return null;
 }
 
+function normalizePaymentMethod(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.trim().toUpperCase();
+  return ["FIAT", "PC", "ALPHA", "MIXED"].includes(normalized) ? normalized : null;
+}
+
 function buildPoolFundingEntries(
   metadata: Record<string, unknown> | null,
   periodKey: string,
@@ -246,22 +255,51 @@ function buildSimulationFact(
     "ib_platform_revenue_usd",
     "ibPlatformRevenueUsd"
   ]);
-  const productFulfillmentOutUsd = readNumberAlias(sinkBreakdown, ["PC_SPEND"]);
+  const paymentMethod = normalizePaymentMethod(
+    readStringAlias(metadata, ["payment_method", "paymentMethod"])
+  );
+  const explicitCashInUsd = readNumberAlias(metadata, ["cash_in_usd", "cashInUsd"]);
+  const explicitInternalCreditSpentUsd = readNumberAlias(metadata, [
+    "internal_credit_spent_usd",
+    "internalCreditSpentUsd"
+  ]);
+  const explicitProductFulfillmentOutUsd = readNumberAlias(metadata, [
+    "product_fulfillment_out_usd",
+    "productFulfillmentOutUsd"
+  ]);
+  const legacyProductFulfillmentOutUsd = readNumberAlias(sinkBreakdown, ["PC_SPEND"]);
+  const productFulfillmentOutUsd =
+    explicitProductFulfillmentOutUsd ??
+    (paymentMethod || explicitInternalCreditSpentUsd !== null ? 0 : legacyProductFulfillmentOutUsd);
 
   let grossCashInUsd: number | null = null;
   let retainedRevenueUsd: number | null = recognizedRevenueUsd;
   let partnerPayoutOutUsd: number | null = null;
+  let internalCreditSpentUsd: number | null = explicitInternalCreditSpentUsd;
+
+  if (explicitCashInUsd !== null) {
+    grossCashInUsd = explicitCashInUsd;
+  }
+
+  if (internalCreditSpentUsd === null && fact.sinkSpendUsd > 0) {
+    internalCreditSpentUsd = fact.sinkSpendUsd;
+  }
 
   if (entryFeeUsd !== null) {
-    grossCashInUsd = entryFeeUsd;
+    grossCashInUsd = grossCashInUsd ?? entryFeeUsd;
     retainedRevenueUsd = entryFeeUsd;
   } else if (grossSaleUsd !== null) {
-    grossCashInUsd = grossSaleUsd;
+    const isInternalCreditPayment = paymentMethod === "PC" || paymentMethod === "ALPHA";
+    grossCashInUsd = grossCashInUsd ?? (isInternalCreditPayment ? 0 : grossSaleUsd);
     retainedRevenueUsd = ibPlatformRevenueUsd ?? recognizedRevenueUsd;
     partnerPayoutOutUsd = cpUserShareUsd;
   } else if (recognizedRevenueUsd !== null) {
-    grossCashInUsd = recognizedRevenueUsd;
+    grossCashInUsd = grossCashInUsd ?? recognizedRevenueUsd;
     retainedRevenueUsd = recognizedRevenueUsd;
+  }
+
+  if (entryFeeUsd !== null) {
+    retainedRevenueUsd = entryFeeUsd;
   }
 
   return {
@@ -285,6 +323,7 @@ function buildSimulationFact(
     grossCashInUsd,
     retainedRevenueUsd,
     partnerPayoutOutUsd,
+    internalCreditSpentUsd,
     productFulfillmentOutUsd,
     poolFundingEntries: buildPoolFundingEntries(metadata, fact.periodKey, fact.sourceSystem)
   };
@@ -307,6 +346,7 @@ function buildSummary(run: Awaited<ReturnType<typeof getRunById>>): SummaryMetri
     company_gross_cash_in_total: metricValue("company_gross_cash_in_total"),
     company_retained_revenue_total: metricValue("company_retained_revenue_total"),
     company_partner_payout_out_total: metricValue("company_partner_payout_out_total"),
+    company_internal_credit_spent_total: metricValue("company_internal_credit_spent_total"),
     company_direct_reward_obligation_total: metricValue("company_direct_reward_obligation_total"),
     company_pool_funding_obligation_total: metricValue("company_pool_funding_obligation_total"),
     company_actual_payout_out_total: metricValue("company_actual_payout_out_total"),
@@ -1139,6 +1179,7 @@ function buildDecisionPack(
       `Gross cash in: ${currencyFormatter.format(summary.company_gross_cash_in_total)}`,
       `Retained revenue: ${currencyFormatter.format(summary.company_retained_revenue_total)}`,
       `Partner payout out: ${currencyFormatter.format(summary.company_partner_payout_out_total)}`,
+      `Internal credit used: ${currencyFormatter.format(summary.company_internal_credit_spent_total)}`,
       `Direct reward obligations: ${currencyFormatter.format(summary.company_direct_reward_obligation_total)}`,
       `Pool funding obligations: ${currencyFormatter.format(summary.company_pool_funding_obligation_total)}`,
       `Actual payout out: ${currencyFormatter.format(summary.company_actual_payout_out_total)}`,

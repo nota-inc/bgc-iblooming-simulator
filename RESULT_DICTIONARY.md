@@ -56,6 +56,7 @@ These metrics are in USD and should be kept separate from ALPHA movement.
 | UI label | Metric key | Meaning |
 | --- | --- | --- |
 | Cash In | `company_gross_cash_in_total` | Total business cash collected before payouts, pass-through splits, or other outflows. |
+| Internal Credit Used | `company_internal_credit_spent_total` | PC, ALPHA, or other internal credit used inside the ecosystem. This is usage, not new cash. |
 | Revenue Kept | `company_retained_revenue_total` | Revenue kept by the company after partner/creator pass-through share is separated. |
 | Partner Payout | `company_partner_payout_out_total` | Cash passed through to partners or creators, such as CP creator share. |
 | Direct Rewards Owed | `company_direct_reward_obligation_total` | Direct reward obligations from uploaded business data. |

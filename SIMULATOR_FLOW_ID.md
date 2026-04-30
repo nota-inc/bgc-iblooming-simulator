@@ -80,6 +80,9 @@ Cara paling gampang memahaminya:
    - `pool_reward_usd`
    - `cashout_usd`
    - `sink_spend_usd`
+   - `cash_in_usd`
+   - `internal_credit_spent_usd`
+   - `payment_method`
    - `active_member`
 
    Jadi langkah ini mengubah data CSV mentah menjadi data terstruktur yang siap dipakai untuk simulasi.
@@ -158,6 +161,8 @@ Cara paling gampang memahaminya:
    - menyesuaikan berdasarkan aktivitas member
    - menerapkan user cap dan group cap
    - membaca actual internal use dari `sink_spend_usd`
+   - membaca cash fiat baru dari `cash_in_usd`
+   - membaca pemakaian PC/ALPHA/internal credit dari `internal_credit_spent_usd`
    - menambahkan modeled internal use hanya kalau scenario memiliki asumsi sink adoption
    - memperkirakan berapa banyak ALPHA yang dicash-out atau dihold
    - menghitung treasury liability dan inflow

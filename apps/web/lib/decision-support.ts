@@ -128,6 +128,7 @@ export type CompareFinancialScenarioViewRow = {
   grossCashIn: number;
   retainedRevenue: number;
   partnerPayoutOut: number;
+  internalCreditSpent: number;
   directObligations: number;
   actualPayoutOut: number;
   fulfillmentOut: number;
@@ -669,6 +670,7 @@ export function buildCompareFinancialScenarioView(
     const grossCashIn = run.summaryMetrics.company_gross_cash_in_total ?? 0;
     const retainedRevenue = run.summaryMetrics.company_retained_revenue_total ?? 0;
     const partnerPayoutOut = run.summaryMetrics.company_partner_payout_out_total ?? 0;
+    const internalCreditSpent = run.summaryMetrics.company_internal_credit_spent_total ?? 0;
     const directObligations =
       (run.summaryMetrics.company_direct_reward_obligation_total ?? 0) +
       (run.summaryMetrics.company_pool_funding_obligation_total ?? 0);
@@ -693,6 +695,7 @@ export function buildCompareFinancialScenarioView(
       grossCashIn,
       retainedRevenue,
       partnerPayoutOut,
+      internalCreditSpent,
       directObligations,
       actualPayoutOut,
       fulfillmentOut,

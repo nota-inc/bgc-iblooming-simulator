@@ -80,6 +80,9 @@ The easiest mental model is:
    - `pool_reward_usd`
    - `cashout_usd`
    - `sink_spend_usd`
+   - `cash_in_usd`
+   - `internal_credit_spent_usd`
+   - `payment_method`
    - `active_member`
 
    So this step changes raw CSV data into structured data that is ready for simulation.
@@ -158,6 +161,8 @@ The easiest mental model is:
    - adjusts by member activity
    - applies user and group caps
    - reads actual internal use from `sink_spend_usd`
+   - reads new fiat cash from `cash_in_usd`
+   - reads PC/ALPHA/internal credit usage from `internal_credit_spent_usd`
    - adds modeled internal use only when the scenario includes sink adoption assumptions
    - estimates how much ALPHA is cashed out or held
    - calculates treasury liability and inflow

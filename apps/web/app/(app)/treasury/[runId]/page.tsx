@@ -33,6 +33,7 @@ const treasuryPositionMetricKeys = [
 
 const obligationMetricKeys = [
   "company_partner_payout_out_total",
+  "company_internal_credit_spent_total",
   "company_direct_reward_obligation_total",
   "company_pool_funding_obligation_total",
   "company_product_fulfillment_out_total",
